@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>jsxlsb - Browser Test</title>
+  <script src="../dist/jsxlsb.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f5f5f5;
+    }
+    h1 {
+      color: #333;
+    }
+    .section {
+      background: white;
+      padding: 20px;
+      margin: 20px 0;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .status {
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 4px;
+    }
+    .success { background: #d4edda; color: #155724; }
+    .error { background: #f8d7da; color: #721c24; }
+    .info { background: #cce5ff; color: #004085; }
+    #html-container {
+      max-height: 400px;
+      overflow: auto;
+      border: 1px solid #d0d0d0;
+      margin-top: 10px;
+    }
+    canvas {
+      border: 1px solid #d0d0d0;
+      margin-top: 10px;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 5px;
+      cursor: pointer;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+    }
+    button:hover { background: #0056b3; }
+    input[type="file"] { margin: 10px 0; }
+    .log { 
+      font-family: monospace; 
+      font-size: 12px;
+      background: #f8f9fa;
+      padding: 10px;
+      border-radius: 4px;
+      max-height: 200px;
+      overflow: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>jsxlsb Browser Test</h1>
+  
+  <div class="section">
+    <h2>1. API Check</h2>
+    <div id="api-check"></div>
+  </div>
+
+  <div class="section">
+    <h2>2. Load XLSB File</h2>
+    <input type="file" id="fileInput" accept=".xlsb">
+    <div id="file-info"></div>
+  </div>
+
+  <div class="section">
+    <h2>3. HTML Renderer</h2>
+    <div id="html-status"></div>
+    <div id="html-container"></div>
+  </div>
+
+  <div class="section">
+    <h2>4. Canvas Renderer</h2>
+    <div id="canvas-status"></div>
+    <button onclick="testCanvasZoomIn()">Zoom In</button>
+    <button onclick="testCanvasZoomOut()">Zoom Out</button>
+    <button onclick="testCanvasScroll()">Scroll to (10, 5)</button>
+    <br>
+    <canvas id="canvas" width="800" height="400"></canvas>
+  </div>
+
+  <div class="section">
+    <h2>5. Test Log</h2>
+    <div id="log" class="log"></div>
+  </div>
+
+  <script>
+    let currentReader = null;
+    let canvasRenderer = null;
+
+    function log(msg) {
+      const logDiv = document.getElementById('log');
+      const time = new Date().toLocaleTimeString();
+      logDiv.innerHTML += `<div>[${time}] ${msg}</div>`;
+      logDiv.scrollTop = logDiv.scrollHeight;
+      console.log(msg);
+    }
+
+    function setStatus(id, type, msg) {
+      document.getElementById(id).innerHTML = `<div class="status ${type}">${msg}</div>`;
+    }
+
+    function checkApi() {
+      const results = [];
+      
+      results.push(['jsxlsb global', typeof jsxlsb !== 'undefined']);
+      results.push(['XlsbReader', typeof jsxlsb.XlsbReader === 'function']);
+      results.push(['XlsbWriter', typeof jsxlsb.XlsbWriter === 'function']);
+      results.push(['CellData', typeof jsxlsb.CellData === 'function']);
+      results.push(['HtmlRenderer', typeof jsxlsb.HtmlRenderer === 'function']);
+      results.push(['CanvasRenderer', typeof jsxlsb.CanvasRenderer === 'function']);
+      results.push(['version', jsxlsb.version === '1.0.0']);
+      
+      let html = '<table border="1" cellpadding="5"><tr><th>Check</th><th>Result</th></tr>';
+      results.forEach(([name, passed]) => {
+        html += `<tr><td>${name}</td><td style="color:${passed ? 'green' : 'red'}">${passed ? 'PASS' : 'FAIL'}</td></tr>`;
+      });
+      html += '</table>';
+      
+      document.getElementById('api-check').innerHTML = html;
+      log('API check completed');
+    }
+
+    async function handleFile(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      try {
+        log(`Loading file: ${file.name} (${file.size} bytes)`);
+        
+        if (currentReader) {
+          currentReader.close();
+        }
+        
+        currentReader = await jsxlsb.XlsbReader.fromFile(file);
+        log('File loaded successfully');
+        
+        const sheets = currentReader.getSheetInfos();
+        log(`Found ${sheets.length} sheet(s): ${sheets.map(s => s.name).join(', ')}`);
+        
+        setStatus('file-info', 'success', `Loaded: ${file.name}<br>Sheets: ${sheets.map(s => s.name).join(', ')}`);
+        
+        testHtmlRenderer();
+        testCanvasRenderer();
+        
+      } catch (err) {
+        log(`ERROR: ${err.message}`);
+        setStatus('file-info', 'error', `Error: ${err.message}`);
+        console.error(err);
+      }
+    }
+
+    function testHtmlRenderer() {
+      if (!currentReader) {
+        setStatus('html-status', 'info', 'Please load a file first');
+        return;
+      }
+      
+      try {
+        log('Testing HTML Renderer...');
+        
+        const renderer = new jsxlsb.HtmlRenderer();
+        const table = renderer.render(currentReader, 0, {
+          maxRows: 100,
+          maxColumns: 20,
+          theme: 'light',
+          stickyHeader: true,
+          showHeader: true,
+          cellWidth: 100
+        });
+        
+        const container = document.getElementById('html-container');
+        container.innerHTML = '';
+        container.appendChild(table);
+        
+        setStatus('html-status', 'success', 'HTML Renderer working!');
+        log('HTML Renderer: SUCCESS');
+        
+      } catch (err) {
+        setStatus('html-status', 'error', `Error: ${err.message}`);
+        log(`HTML Renderer ERROR: ${err.message}`);
+        console.error(err);
+      }
+    }
+
+    function testCanvasRenderer() {
+      if (!currentReader) {
+        setStatus('canvas-status', 'info', 'Please load a file first');
+        return;
+      }
+      
+      try {
+        log('Testing Canvas Renderer...');
+        
+        if (canvasRenderer) {
+          canvasRenderer.destroy();
+        }
+        
+        const canvas = document.getElementById('canvas');
+        canvasRenderer = new jsxlsb.CanvasRenderer();
+        
+        canvasRenderer.render(canvas, currentReader, 0, {
+          cellWidth: 80,
+          cellHeight: 24,
+          fontFamily: 'Arial',
+          fontSize: 12,
+          maxRenderRows: 50,
+          maxRenderColumns: 20
+        });
+        
+        setStatus('canvas-status', 'success', 'Canvas Renderer working! Use mouse wheel to scroll.');
+        log('Canvas Renderer: SUCCESS');
+        
+      } catch (err) {
+        setStatus('canvas-status', 'error', `Error: ${err.message}`);
+        log(`Canvas Renderer ERROR: ${err.message}`);
+        console.error(err);
+      }
+    }
+
+    function testCanvasZoomIn() {
+      if (canvasRenderer) {
+        canvasRenderer.setZoom(1.5);
+        log('Canvas zoom set to 1.5');
+      }
+    }
+
+    function testCanvasZoomOut() {
+      if (canvasRenderer) {
+        canvasRenderer.setZoom(0.75);
+        log('Canvas zoom set to 0.75');
+      }
+    }
+
+    function testCanvasScroll() {
+      if (canvasRenderer) {
+        canvasRenderer.scrollTo(10, 5);
+        log('Canvas scrolled to row 10, col 5');
+      }
+    }
+
+    document.getElementById('fileInput').addEventListener('change', handleFile);
+    
+    window.onload = function() {
+      checkApi();
+      log('Browser test page loaded');
+      log('Please select an XLSB file to test renderers');
+    };
+  </script>
+</body>
+</html>

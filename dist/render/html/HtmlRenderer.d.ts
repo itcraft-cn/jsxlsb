@@ -9,4 +9,5 @@ export declare class HtmlRenderer {
     setStyles(styles: Record<string, string>): void;
     private columnToLetter;
     private formatNumber;
+    private getDecimals;
 }

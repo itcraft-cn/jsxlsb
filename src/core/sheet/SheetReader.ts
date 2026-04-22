@@ -14,10 +14,10 @@ import { CellType } from '../cell/CellType';
 
 export interface InternalRowHandler {
   onRowStart(rowIndex: number, columnCount: number): void;
-  onCellNumber(row: number, col: number, value: number): void;
-  onCellText(row: number, col: number, value: string): void;
-  onCellBoolean(row: number, col: number, value: boolean): void;
-  onCellBlank(row: number, col: number): void;
+  onCellNumber(row: number, col: number, value: number, styleIndex: number): void;
+  onCellText(row: number, col: number, value: string, styleIndex: number): void;
+  onCellBoolean(row: number, col: number, value: boolean, styleIndex: number): void;
+  onCellBlank(row: number, col: number, styleIndex: number): void;
   onRowEnd(rowIndex: number): void;
 }
 
@@ -141,45 +141,58 @@ export class SheetReader {
     handler.onRowStart(this.currentRow, columnCount);
   }
 
+  private readStyleIndex(offset: number): number {
+    if (offset + 7 > this.buffer.length) return 0;
+    return (this.buffer[offset + 4] & 0xFF) |
+           ((this.buffer[offset + 5] & 0xFF) << 8) |
+           ((this.buffer[offset + 6] & 0xFF) << 16);
+  }
+
   private handleBrtCellRk(offset: number, size: number, handler: InternalRowHandler): void {
     const col = readIntLE(this.buffer, offset);
+    const styleIndex = this.readStyleIndex(offset);
     const rkValue = readIntLE(this.buffer, offset + 8);
     const value = this.decodeRk(rkValue);
-    handler.onCellNumber(this.currentRow, col, value);
+    handler.onCellNumber(this.currentRow, col, value, styleIndex);
   }
 
   private handleBrtCellReal(offset: number, size: number, handler: InternalRowHandler): void {
     const col = readIntLE(this.buffer, offset);
+    const styleIndex = this.readStyleIndex(offset);
     const value = readDoubleLE(this.buffer, offset + 8);
-    handler.onCellNumber(this.currentRow, col, value);
+    handler.onCellNumber(this.currentRow, col, value, styleIndex);
   }
 
   private handleBrtCellSt(offset: number, size: number, handler: InternalRowHandler): void {
     const col = readIntLE(this.buffer, offset);
+    const styleIndex = this.readStyleIndex(offset);
     const sstIndex = readIntLE(this.buffer, offset + 8);
     const value = this.sst.getString(sstIndex);
-    handler.onCellText(this.currentRow, col, value);
+    handler.onCellText(this.currentRow, col, value, styleIndex);
   }
 
   private handleBrtCellBool(offset: number, size: number, handler: InternalRowHandler): void {
     const col = readIntLE(this.buffer, offset);
+    const styleIndex = this.readStyleIndex(offset);
     const value = this.buffer[offset + 8] !== 0;
-    handler.onCellBoolean(this.currentRow, col, value);
+    handler.onCellBoolean(this.currentRow, col, value, styleIndex);
   }
 
   private handleBrtCellBlank(offset: number, size: number, handler: InternalRowHandler): void {
     const col = readIntLE(this.buffer, offset);
-    handler.onCellBlank(this.currentRow, col);
+    const styleIndex = this.readStyleIndex(offset);
+    handler.onCellBlank(this.currentRow, col, styleIndex);
   }
 
   private handleBrtCellIsst(offset: number, size: number, handler: InternalRowHandler): void {
     if (size < 12) return;
 
     const col = readIntLE(this.buffer, offset);
+    const styleIndex = this.readStyleIndex(offset);
     const sstIndex = readIntLE(this.buffer, offset + 8);
 
     const value = this.sst.getString(sstIndex);
-    handler.onCellText(this.currentRow, col, value || '');
+    handler.onCellText(this.currentRow, col, value || '', styleIndex);
   }
 
   private decodeRk(rkValue: number): number {

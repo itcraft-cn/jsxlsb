@@ -7577,35 +7577,55 @@
               w.writeIntLE(segEndCol);
           }
       }
-      writeCell(w, row, col, data, styleIndex = 0) {
+      writeCell(w, row, col, data, styleIndex = -1) {
+          const actualStyleIndex = styleIndex >= 0 ? styleIndex : this.getStyleIdForFormat(data);
           switch (data.type) {
               case exports.CellType.NUMBER:
                   const num = data.value;
                   if (num === Math.floor(num) && num >= MIN_RK_INTEGER && num <= MAX_RK_INTEGER) {
-                      this.writeBrtCellRk(w, col, num, styleIndex);
+                      this.writeBrtCellRk(w, col, num, actualStyleIndex);
                   }
                   else {
-                      this.writeBrtCellReal(w, col, num, styleIndex);
+                      this.writeBrtCellReal(w, col, num, actualStyleIndex);
                   }
                   break;
               case exports.CellType.TEXT:
                   const sstIdx = this.sst.addString(data.value);
-                  this.writeBrtCellIsst(w, col, sstIdx, styleIndex);
+                  this.writeBrtCellIsst(w, col, sstIdx, actualStyleIndex);
                   break;
               case exports.CellType.DATE:
                   const timestamp = data.value;
                   const excelDate = timestampToExcelDate(timestamp);
-                  this.writeBrtCellReal(w, col, excelDate, this.defaultDateStyleId);
+                  const dateStyleIndex = styleIndex >= 0 ? styleIndex : this.getDateStyleIdForFormat(data);
+                  this.writeBrtCellReal(w, col, excelDate, dateStyleIndex);
                   break;
               case exports.CellType.BOOLEAN:
-                  this.writeBrtCellBool(w, col, data.value, styleIndex);
+                  this.writeBrtCellBool(w, col, data.value, actualStyleIndex);
                   break;
               case exports.CellType.BLANK:
-                  this.writeBrtCellBlank(w, col, styleIndex);
+                  this.writeBrtCellBlank(w, col, actualStyleIndex);
                   break;
               default:
                   throw new Error('Unknown cell type: ' + data.type);
           }
+      }
+      getStyleIdForFormat(data) {
+          if (!data.hasFormatCode()) {
+              return 0;
+          }
+          if (!this.stylesWriter) {
+              return 0;
+          }
+          return this.stylesWriter.addDateFormat(data.formatCode);
+      }
+      getDateStyleIdForFormat(data) {
+          if (!data.hasFormatCode()) {
+              return this.defaultDateStyleId;
+          }
+          if (!this.stylesWriter) {
+              return this.defaultDateStyleId;
+          }
+          return this.stylesWriter.addDateFormat(data.formatCode);
       }
       writeBrtCellRk(w, col, value, styleIndex) {
           w.writeRecordHeader(RecordTypes.BrtCellRk, 12);
@@ -7711,15 +7731,17 @@
       constructor() {
           this.dateFormats = [];
           this.formatRegistry = new Map();
+          this.styleRegistry = new Map();
           this.nextFormatId = 164;
       }
       addDateFormat(formatCode) {
-          if (this.formatRegistry.has(formatCode)) {
-              return this.formatRegistry.get(formatCode);
+          if (this.styleRegistry.has(formatCode)) {
+              return this.styleRegistry.get(formatCode);
           }
           const styleId = this.dateFormats.length + 1;
           const formatId = this.nextFormatId++;
           this.formatRegistry.set(formatCode, formatId);
+          this.styleRegistry.set(formatCode, styleId);
           this.dateFormats.push(formatCode);
           return styleId;
       }
@@ -8277,6 +8299,120 @@
       }
   }
 
+  class StylesReader {
+      constructor() {
+          this.formats = new Map();
+          this.xfFormatIds = [];
+          this.styleFormatIds = [];
+      }
+      load(buffer) {
+          let pos = 0;
+          while (pos + 2 <= buffer.length) {
+              const recordType = readVarInt(buffer, pos);
+              const typeSize = varIntSize(recordType);
+              pos += typeSize;
+              if (pos >= buffer.length)
+                  break;
+              const recordSize = readVarSize(buffer, pos);
+              const sizeBytes = varSizeSize(recordSize);
+              pos += sizeBytes;
+              if (recordSize < 0 || recordSize > buffer.length) {
+                  pos += Math.max(0, recordSize);
+                  continue;
+              }
+              if (recordSize > 0 && pos + recordSize > buffer.length) {
+                  break;
+              }
+              switch (recordType) {
+                  case RecordTypes.BrtFmt:
+                      this.handleBrtFmt(buffer, pos, recordSize);
+                      break;
+                  case RecordTypes.BrtXF:
+                      this.handleBrtXF(buffer, pos, recordSize);
+                      break;
+              }
+              pos += recordSize;
+          }
+      }
+      handleBrtFmt(buffer, offset, size) {
+          if (size < 6)
+              return;
+          const formatId = buffer[offset] | (buffer[offset + 1] << 8);
+          const strLen = readIntLE(buffer, offset + 2);
+          if (strLen > 0 && offset + 6 + strLen * 2 <= buffer.length) {
+              const formatCode = decodeUTF16LE(buffer, offset + 6, strLen);
+              this.formats.set(formatId, formatCode);
+          }
+      }
+      handleBrtXF(buffer, offset, size) {
+          if (size < 16)
+              return;
+          const numFmtId = buffer[offset + 2] | (buffer[offset + 3] << 8);
+          if (this.xfFormatIds.length === 0) {
+              this.xfFormatIds.push(numFmtId);
+          }
+          else {
+              this.styleFormatIds.push(numFmtId);
+          }
+      }
+      getFormatCode(styleIndex) {
+          if (styleIndex < 0)
+              return undefined;
+          if (styleIndex < this.styleFormatIds.length) {
+              const formatId = this.styleFormatIds[styleIndex];
+              return this.formats.get(formatId) || this.getBuiltinFormat(formatId);
+          }
+          return undefined;
+      }
+      getBuiltinFormat(formatId) {
+          const builtinFormats = {
+              0: 'General',
+              1: '0',
+              2: '0.00',
+              3: '#,##0',
+              4: '#,##0.00',
+              5: '$#,##0_);($#,##0)',
+              6: '$#,##0_);[Red]($#,##0)',
+              7: '$#,##0.00_);($#,##0.00)',
+              8: '$#,##0.00_);[Red]($#,##0.00)',
+              9: '0%',
+              10: '0.00%',
+              11: '0.00E+00',
+              12: '# ?/?',
+              13: '# ??/??',
+              14: 'mm-dd-yy',
+              15: 'd-mmm-yy',
+              16: 'd-mmm',
+              17: 'mmm-yy',
+              18: 'h:mm AM/PM',
+              19: 'h:mm:ss AM/PM',
+              20: 'h:mm',
+              21: 'h:mm:ss',
+              22: 'm/d/yy h:mm',
+              37: '#,##0_);(#,##0)',
+              38: '#,##0_);[Red](#,##0)',
+              39: '#,##0.00_);(#,##0.00)',
+              40: '#,##0.00_);[Red](#,##0.00)',
+              41: '_(*#,##0_);_(*(#,##0);_(* "-"_);_(@_)',
+              42: '_($*#,##0_);_($* (#,##0);_($* "-"_);_(@_)',
+              43: '_(*#,##0.00_);_(*(#,##0.00);_(* "-"??_);_(@_)',
+              44: '_($*#,##0.00_);_($* (#,##0.00);_($* "-"??_);_(@_)',
+              45: 'mm:ss',
+              46: '[h]:mm:ss',
+              47: 'mmss.0',
+              48: '##0.0E+0',
+              49: '@',
+          };
+          return builtinFormats[formatId];
+      }
+      getFormats() {
+          return this.formats;
+      }
+      getStyleCount() {
+          return this.styleFormatIds.length;
+      }
+  }
+
   class WorkbookReader {
       constructor(buffer) {
           this.buffer = buffer;
@@ -8424,39 +8560,52 @@
           const columnCount = Math.max(1, lastCol + 1);
           handler.onRowStart(this.currentRow, columnCount);
       }
+      readStyleIndex(offset) {
+          if (offset + 7 > this.buffer.length)
+              return 0;
+          return (this.buffer[offset + 4] & 0xFF) |
+              ((this.buffer[offset + 5] & 0xFF) << 8) |
+              ((this.buffer[offset + 6] & 0xFF) << 16);
+      }
       handleBrtCellRk(offset, size, handler) {
           const col = readIntLE(this.buffer, offset);
+          const styleIndex = this.readStyleIndex(offset);
           const rkValue = readIntLE(this.buffer, offset + 8);
           const value = this.decodeRk(rkValue);
-          handler.onCellNumber(this.currentRow, col, value);
+          handler.onCellNumber(this.currentRow, col, value, styleIndex);
       }
       handleBrtCellReal(offset, size, handler) {
           const col = readIntLE(this.buffer, offset);
+          const styleIndex = this.readStyleIndex(offset);
           const value = readDoubleLE(this.buffer, offset + 8);
-          handler.onCellNumber(this.currentRow, col, value);
+          handler.onCellNumber(this.currentRow, col, value, styleIndex);
       }
       handleBrtCellSt(offset, size, handler) {
           const col = readIntLE(this.buffer, offset);
+          const styleIndex = this.readStyleIndex(offset);
           const sstIndex = readIntLE(this.buffer, offset + 8);
           const value = this.sst.getString(sstIndex);
-          handler.onCellText(this.currentRow, col, value);
+          handler.onCellText(this.currentRow, col, value, styleIndex);
       }
       handleBrtCellBool(offset, size, handler) {
           const col = readIntLE(this.buffer, offset);
+          const styleIndex = this.readStyleIndex(offset);
           const value = this.buffer[offset + 8] !== 0;
-          handler.onCellBoolean(this.currentRow, col, value);
+          handler.onCellBoolean(this.currentRow, col, value, styleIndex);
       }
       handleBrtCellBlank(offset, size, handler) {
           const col = readIntLE(this.buffer, offset);
-          handler.onCellBlank(this.currentRow, col);
+          const styleIndex = this.readStyleIndex(offset);
+          handler.onCellBlank(this.currentRow, col, styleIndex);
       }
       handleBrtCellIsst(offset, size, handler) {
           if (size < 12)
               return;
           const col = readIntLE(this.buffer, offset);
+          const styleIndex = this.readStyleIndex(offset);
           const sstIndex = readIntLE(this.buffer, offset + 8);
           const value = this.sst.getString(sstIndex);
-          handler.onCellText(this.currentRow, col, value || '');
+          handler.onCellText(this.currentRow, col, value || '', styleIndex);
       }
       decodeRk(rkValue) {
           const isInt = (rkValue & 1) !== 0;
@@ -8485,6 +8634,7 @@
           this.buffer = buffer;
           this.container = new ZipReader(buffer);
           this.sst = this.loadSharedStringsTable();
+          this.styles = this.loadStylesTable();
       }
       loadSharedStringsTable() {
           const sstBuffer = this.container.getEntryData('xl/sharedStrings.bin');
@@ -8493,6 +8643,14 @@
               table.load(sstBuffer);
           }
           return table;
+      }
+      loadStylesTable() {
+          const stylesBuffer = this.container.getEntryData('xl/styles.bin');
+          const styles = new StylesReader();
+          if (stylesBuffer) {
+              styles.load(stylesBuffer);
+          }
+          return styles;
       }
       getSheetInfos() {
           const workbookBuffer = this.container.getEntryData('xl/workbook.bin');
@@ -8505,26 +8663,29 @@
       forEachRow(sheetIndex, handler) {
           const sheetBuffer = this.getSheetBuffer(sheetIndex);
           const sheetReader = new SheetReader(sheetBuffer, this.sst);
-          sheetReader.readRows({
+          const styles = this.styles;
+          const internalHandler = {
               onRowStart(rowIndex, columnCount) {
                   handler.onRowStart(rowIndex, columnCount);
               },
-              onCellNumber(row, col, value) {
-                  handler.onCell(row, col, CellData.number(value));
+              onCellNumber(row, col, value, styleIndex) {
+                  const formatCode = styles.getFormatCode(styleIndex);
+                  handler.onCell(row, col, CellData.number(value, formatCode));
               },
-              onCellText(row, col, value) {
+              onCellText(row, col, value, styleIndex) {
                   handler.onCell(row, col, CellData.text(value));
               },
-              onCellBoolean(row, col, value) {
+              onCellBoolean(row, col, value, styleIndex) {
                   handler.onCell(row, col, CellData.bool(value));
               },
-              onCellBlank(row, col) {
+              onCellBlank(row, col, styleIndex) {
                   handler.onCell(row, col, CellData.blank());
               },
               onRowEnd(rowIndex) {
                   handler.onRowEnd(rowIndex);
               }
-          });
+          };
+          sheetReader.readRows(internalHandler);
       }
       readRows(sheetIndex, startRow, batchSize) {
           const endRow = startRow + batchSize - 1;
@@ -8534,6 +8695,7 @@
           const estimatedColumns = 100;
           const sheetBuffer = this.getSheetBuffer(sheetIndex);
           const sheetReader = new SheetReader(sheetBuffer, this.sst);
+          const styles = this.styles;
           try {
               sheetReader.readRows({
                   onRowStart(rowIndex, colCount) {
@@ -8546,7 +8708,7 @@
                           throw new BatchCompleteException();
                       }
                   },
-                  onCellNumber(row, col, value) {
+                  onCellNumber(row, col, value, styleIndex) {
                       if (row >= startRow && row <= endRow) {
                           if (col >= currentRowData.length) {
                               const newData = new Array(col + 1).fill(null);
@@ -8555,11 +8717,12 @@
                               }
                               currentRowData = newData;
                           }
-                          currentRowData[col] = CellData.number(value);
+                          const formatCode = styles.getFormatCode(styleIndex);
+                          currentRowData[col] = CellData.number(value, formatCode);
                           maxColInRow = Math.max(maxColInRow, col);
                       }
                   },
-                  onCellText(row, col, value) {
+                  onCellText(row, col, value, styleIndex) {
                       if (row >= startRow && row <= endRow) {
                           if (col >= currentRowData.length) {
                               const newData = new Array(col + 1).fill(null);
@@ -8572,7 +8735,7 @@
                           maxColInRow = Math.max(maxColInRow, col);
                       }
                   },
-                  onCellBoolean(row, col, value) {
+                  onCellBoolean(row, col, value, styleIndex) {
                       if (row >= startRow && row <= endRow) {
                           if (col >= currentRowData.length) {
                               const newData = new Array(col + 1).fill(null);
@@ -8585,7 +8748,7 @@
                           maxColInRow = Math.max(maxColInRow, col);
                       }
                   },
-                  onCellBlank(row, col) {
+                  onCellBlank(row, col, styleIndex) {
                       if (row >= startRow && row <= endRow) {
                           if (col >= currentRowData.length) {
                               const newData = new Array(col + 1).fill(null);
@@ -8631,6 +8794,9 @@
       }
       hasSharedStrings() {
           return this.sst.getCount() > 0;
+      }
+      getStyles() {
+          return this.styles;
       }
       close() {
       }
@@ -8870,18 +9036,46 @@
           return letters[firstLetter] + letters[secondLetter];
       }
       formatNumber(value, formatCode) {
-          if (formatCode) {
-              if (formatCode.includes('%')) {
-                  return (value * 100).toFixed(2) + '%';
+          if (!formatCode || formatCode === 'General') {
+              return String(value);
+          }
+          if (formatCode.endsWith('%')) {
+              const percentValue = value * 100;
+              const decimals = this.getDecimals(formatCode);
+              return percentValue.toFixed(decimals) + '%';
+          }
+          if (formatCode.includes('#,##0') || formatCode.includes('#,#')) {
+              const decimals = this.getDecimals(formatCode);
+              if (formatCode.startsWith('￥') || formatCode.startsWith('$') || formatCode.startsWith('¥')) {
+                  const symbol = formatCode.charAt(0);
+                  return symbol + value.toLocaleString('zh-CN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
               }
-              if (formatCode.includes('#,##0')) {
-                  return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-              }
-              if (formatCode.includes('￥') || formatCode.includes('$')) {
-                  return formatCode.replace(/^[￥$]/, '') + value.toLocaleString('en-US', { minimumFractionDigits: 2 });
-              }
+              return value.toLocaleString('zh-CN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+          }
+          if (formatCode.match(/^[0]+\.?[0]*$/)) {
+              const decimals = this.getDecimals(formatCode);
+              return value.toFixed(decimals);
+          }
+          if (formatCode.includes('E+')) {
+              return value.toExponential(2);
           }
           return String(value);
+      }
+      getDecimals(formatCode) {
+          const match = formatCode.match(/\.([0]+)/);
+          if (match) {
+              return match[1].length;
+          }
+          if (formatCode.includes('.') && !formatCode.includes('%')) {
+              return 2;
+          }
+          if (formatCode.endsWith('%') && formatCode.includes('.')) {
+              const percentMatch = formatCode.match(/\.([0]+)%/);
+              if (percentMatch) {
+                  return percentMatch[1].length;
+              }
+          }
+          return 0;
       }
   }
 
@@ -9084,13 +9278,28 @@
           if (cellData.isNumber()) {
               const value = cellData.getNumberValue();
               const formatCode = cellData.formatCode;
-              if (formatCode) {
-                  if (formatCode.includes('%')) {
-                      return (value * 100).toFixed(2) + '%';
+              if (!formatCode || formatCode === 'General') {
+                  return String(value);
+              }
+              if (formatCode.endsWith('%')) {
+                  const percentValue = value * 100;
+                  const decimals = this.getDecimals(formatCode);
+                  return percentValue.toFixed(decimals) + '%';
+              }
+              if (formatCode.includes('#,##0') || formatCode.includes('#,#')) {
+                  const decimals = this.getDecimals(formatCode);
+                  if (formatCode.startsWith('￥') || formatCode.startsWith('$') || formatCode.startsWith('¥')) {
+                      const symbol = formatCode.charAt(0);
+                      return symbol + value.toLocaleString('zh-CN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
                   }
-                  if (formatCode.includes('#,##0')) {
-                      return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                  }
+                  return value.toLocaleString('zh-CN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+              }
+              if (formatCode.match(/^[0]+\.?[0]*$/)) {
+                  const decimals = this.getDecimals(formatCode);
+                  return value.toFixed(decimals);
+              }
+              if (formatCode.includes('E+')) {
+                  return value.toExponential(2);
               }
               return String(value);
           }
@@ -9106,6 +9315,22 @@
           }
           return '';
       }
+      getDecimals(formatCode) {
+          const match = formatCode.match(/\.([0]+)/);
+          if (match) {
+              return match[1].length;
+          }
+          if (formatCode.includes('.') && !formatCode.includes('%')) {
+              return 2;
+          }
+          if (formatCode.endsWith('%') && formatCode.includes('.')) {
+              const percentMatch = formatCode.match(/\.([0]+)%/);
+              if (percentMatch) {
+                  return percentMatch[1].length;
+              }
+          }
+          return 0;
+      }
   }
 
   const version = '1.0.0';
@@ -9116,6 +9341,8 @@
   exports.CellData = CellData;
   exports.HtmlRenderer = HtmlRenderer;
   exports.SharedStringsTable = SharedStringsTable;
+  exports.StylesReader = StylesReader;
+  exports.StylesWriter = StylesWriter;
   exports.XlsbReader = XlsbReader;
   exports.XlsbWriter = XlsbWriter;
   exports.ZipReader = ZipReader;

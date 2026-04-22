@@ -9,6 +9,8 @@ export { Biff12Reader } from './core/biff12/Biff12Reader';
 export { SharedStringsTable } from './core/sst/SharedStringsTable';
 export { ZipWriter } from './core/container/ZipWriter';
 export { ZipReader } from './core/container/ZipReader';
+export { StylesReader } from './core/style/StylesReader';
+export { StylesWriter } from './core/style/StylesWriter';
 
 export const version = '1.0.0';
 

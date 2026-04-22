@@ -18,6 +18,8 @@ export declare class SheetWriter {
     private writeSheetFooter;
     private writeBrtRowHdr;
     private writeCell;
+    private getStyleIdForFormat;
+    private getDateStyleIdForFormat;
     private writeBrtCellRk;
     private writeBrtCellReal;
     private writeBrtCellBool;

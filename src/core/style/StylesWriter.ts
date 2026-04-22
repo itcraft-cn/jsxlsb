@@ -4,15 +4,17 @@ import { RecordTypes } from '../biff12/RecordTypes';
 export class StylesWriter {
   private dateFormats: string[] = [];
   private formatRegistry: Map<string, number> = new Map();
+  private styleRegistry: Map<string, number> = new Map();
   private nextFormatId: number = 164;
 
   addDateFormat(formatCode: string): number {
-    if (this.formatRegistry.has(formatCode)) {
-      return this.formatRegistry.get(formatCode)!;
+    if (this.styleRegistry.has(formatCode)) {
+      return this.styleRegistry.get(formatCode)!;
     }
     const styleId = this.dateFormats.length + 1;
     const formatId = this.nextFormatId++;
     this.formatRegistry.set(formatCode, formatId);
+    this.styleRegistry.set(formatCode, styleId);
     this.dateFormats.push(formatCode);
     return styleId;
   }

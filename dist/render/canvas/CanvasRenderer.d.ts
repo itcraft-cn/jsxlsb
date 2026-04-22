@@ -27,4 +27,5 @@ export declare class CanvasRenderer {
     destroy(): void;
     private columnToLetter;
     private formatCellText;
+    private getDecimals;
 }

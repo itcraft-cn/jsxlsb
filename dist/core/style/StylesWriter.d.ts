@@ -1,6 +1,7 @@
 export declare class StylesWriter {
     private dateFormats;
     private formatRegistry;
+    private styleRegistry;
     private nextFormatId;
     addDateFormat(formatCode: string): number;
     toBiff12Bytes(): Uint8Array;

@@ -2,8 +2,9 @@ import { CellData } from '../core/cell/CellData';
 import { CellType } from '../core/cell/CellType';
 import { ZipReader } from '../core/container/ZipReader';
 import { SharedStringsTable } from '../core/sst/SharedStringsTable';
+import { StylesReader } from '../core/style/StylesReader';
 import { WorkbookReader } from '../core/workbook/WorkbookReader';
-import { SheetReader, BatchCompleteException } from '../core/sheet/SheetReader';
+import { SheetReader, BatchCompleteException, InternalRowHandler } from '../core/sheet/SheetReader';
 import { SheetInfo, RowHandler } from './interfaces';
 
 export interface XlsbReaderOptions {
@@ -14,12 +15,14 @@ export interface XlsbReaderOptions {
 export class XlsbReader {
   private container: ZipReader;
   private sst: SharedStringsTable;
+  private styles: StylesReader;
   private buffer: Uint8Array;
 
   private constructor(buffer: Uint8Array) {
     this.buffer = buffer;
     this.container = new ZipReader(buffer);
     this.sst = this.loadSharedStringsTable();
+    this.styles = this.loadStylesTable();
   }
 
   private loadSharedStringsTable(): SharedStringsTable {
@@ -29,6 +32,15 @@ export class XlsbReader {
       table.load(sstBuffer);
     }
     return table;
+  }
+
+  private loadStylesTable(): StylesReader {
+    const stylesBuffer = this.container.getEntryData('xl/styles.bin');
+    const styles = new StylesReader();
+    if (stylesBuffer) {
+      styles.load(stylesBuffer);
+    }
+    return styles;
   }
 
   getSheetInfos(): SheetInfo[] {
@@ -43,27 +55,31 @@ export class XlsbReader {
   forEachRow(sheetIndex: number, handler: RowHandler): void {
     const sheetBuffer = this.getSheetBuffer(sheetIndex);
     const sheetReader = new SheetReader(sheetBuffer, this.sst);
+    const styles = this.styles;
 
-    sheetReader.readRows({
+    const internalHandler: InternalRowHandler = {
       onRowStart(rowIndex: number, columnCount: number) {
         handler.onRowStart(rowIndex, columnCount);
       },
-      onCellNumber(row: number, col: number, value: number) {
-        handler.onCell(row, col, CellData.number(value));
+      onCellNumber(row: number, col: number, value: number, styleIndex: number) {
+        const formatCode = styles.getFormatCode(styleIndex);
+        handler.onCell(row, col, CellData.number(value, formatCode));
       },
-      onCellText(row: number, col: number, value: string) {
+      onCellText(row: number, col: number, value: string, styleIndex: number) {
         handler.onCell(row, col, CellData.text(value));
       },
-      onCellBoolean(row: number, col: number, value: boolean) {
+      onCellBoolean(row: number, col: number, value: boolean, styleIndex: number) {
         handler.onCell(row, col, CellData.bool(value));
       },
-      onCellBlank(row: number, col: number) {
+      onCellBlank(row: number, col: number, styleIndex: number) {
         handler.onCell(row, col, CellData.blank());
       },
       onRowEnd(rowIndex: number) {
         handler.onRowEnd(rowIndex);
       }
-    });
+    };
+
+    sheetReader.readRows(internalHandler);
   }
 
   readRows(sheetIndex: number, startRow: number, batchSize: number): CellData[][] {
@@ -75,6 +91,7 @@ export class XlsbReader {
 
     const sheetBuffer = this.getSheetBuffer(sheetIndex);
     const sheetReader = new SheetReader(sheetBuffer, this.sst);
+    const styles = this.styles;
 
     try {
       sheetReader.readRows({
@@ -87,7 +104,7 @@ export class XlsbReader {
             throw new BatchCompleteException();
           }
         },
-        onCellNumber(row: number, col: number, value: number) {
+        onCellNumber(row: number, col: number, value: number, styleIndex: number) {
           if (row >= startRow && row <= endRow) {
             if (col >= currentRowData.length) {
               const newData = new Array(col + 1).fill(null);
@@ -96,11 +113,12 @@ export class XlsbReader {
               }
               currentRowData = newData;
             }
-            currentRowData[col] = CellData.number(value);
+            const formatCode = styles.getFormatCode(styleIndex);
+            currentRowData[col] = CellData.number(value, formatCode);
             maxColInRow = Math.max(maxColInRow, col);
           }
         },
-        onCellText(row: number, col: number, value: string) {
+        onCellText(row: number, col: number, value: string, styleIndex: number) {
           if (row >= startRow && row <= endRow) {
             if (col >= currentRowData.length) {
               const newData = new Array(col + 1).fill(null);
@@ -113,7 +131,7 @@ export class XlsbReader {
             maxColInRow = Math.max(maxColInRow, col);
           }
         },
-        onCellBoolean(row: number, col: number, value: boolean) {
+        onCellBoolean(row: number, col: number, value: boolean, styleIndex: number) {
           if (row >= startRow && row <= endRow) {
             if (col >= currentRowData.length) {
               const newData = new Array(col + 1).fill(null);
@@ -126,7 +144,7 @@ export class XlsbReader {
             maxColInRow = Math.max(maxColInRow, col);
           }
         },
-        onCellBlank(row: number, col: number) {
+        onCellBlank(row: number, col: number, styleIndex: number) {
           if (row >= startRow && row <= endRow) {
             if (col >= currentRowData.length) {
               const newData = new Array(col + 1).fill(null);
@@ -173,6 +191,10 @@ export class XlsbReader {
 
   hasSharedStrings(): boolean {
     return this.sst.getCount() > 0;
+  }
+
+  getStyles(): StylesReader {
+    return this.styles;
   }
 
   close(): void {

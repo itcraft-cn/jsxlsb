@@ -237,14 +237,34 @@ export class CanvasRenderer {
       const value = cellData.getNumberValue()!;
       const formatCode = cellData.formatCode;
 
-      if (formatCode) {
-        if (formatCode.includes('%')) {
-          return (value * 100).toFixed(2) + '%';
-        }
-        if (formatCode.includes('#,##0')) {
-          return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        }
+      if (!formatCode || formatCode === 'General') {
+        return String(value);
       }
+
+      if (formatCode.endsWith('%')) {
+        const percentValue = value * 100;
+        const decimals = this.getDecimals(formatCode);
+        return percentValue.toFixed(decimals) + '%';
+      }
+
+      if (formatCode.includes('#,##0') || formatCode.includes('#,#')) {
+        const decimals = this.getDecimals(formatCode);
+        if (formatCode.startsWith('￥') || formatCode.startsWith('$') || formatCode.startsWith('¥')) {
+          const symbol = formatCode.charAt(0);
+          return symbol + value.toLocaleString('zh-CN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+        }
+        return value.toLocaleString('zh-CN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+      }
+
+      if (formatCode.match(/^[0]+\.?[0]*$/)) {
+        const decimals = this.getDecimals(formatCode);
+        return value.toFixed(decimals);
+      }
+
+      if (formatCode.includes('E+')) {
+        return value.toExponential(2);
+      }
+
       return String(value);
     }
 
@@ -262,5 +282,22 @@ export class CanvasRenderer {
     }
 
     return '';
+  }
+
+  private getDecimals(formatCode: string): number {
+    const match = formatCode.match(/\.([0]+)/);
+    if (match) {
+      return match[1].length;
+    }
+    if (formatCode.includes('.') && !formatCode.includes('%')) {
+      return 2;
+    }
+    if (formatCode.endsWith('%') && formatCode.includes('.')) {
+      const percentMatch = formatCode.match(/\.([0]+)%/);
+      if (percentMatch) {
+        return percentMatch[1].length;
+      }
+    }
+    return 0;
   }
 }

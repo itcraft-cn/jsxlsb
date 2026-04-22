@@ -139,39 +139,62 @@ export class SheetWriter {
     }
   }
 
-  private writeCell(w: Biff12Writer, row: number, col: number, data: CellData, styleIndex: number = 0): void {
+  private writeCell(w: Biff12Writer, row: number, col: number, data: CellData, styleIndex: number = -1): void {
+    const actualStyleIndex = styleIndex >= 0 ? styleIndex : this.getStyleIdForFormat(data);
+    
     switch (data.type) {
       case CellType.NUMBER:
         const num = data.value as number;
         if (num === Math.floor(num) && num >= MIN_RK_INTEGER && num <= MAX_RK_INTEGER) {
-          this.writeBrtCellRk(w, col, num, styleIndex);
+          this.writeBrtCellRk(w, col, num, actualStyleIndex);
         } else {
-          this.writeBrtCellReal(w, col, num, styleIndex);
+          this.writeBrtCellReal(w, col, num, actualStyleIndex);
         }
         break;
 
       case CellType.TEXT:
         const sstIdx = this.sst.addString(data.value as string);
-        this.writeBrtCellIsst(w, col, sstIdx, styleIndex);
+        this.writeBrtCellIsst(w, col, sstIdx, actualStyleIndex);
         break;
 
       case CellType.DATE:
         const timestamp = data.value as number;
         const excelDate = timestampToExcelDate(timestamp);
-        this.writeBrtCellReal(w, col, excelDate, this.defaultDateStyleId);
+        const dateStyleIndex = styleIndex >= 0 ? styleIndex : this.getDateStyleIdForFormat(data);
+        this.writeBrtCellReal(w, col, excelDate, dateStyleIndex);
         break;
 
       case CellType.BOOLEAN:
-        this.writeBrtCellBool(w, col, data.value as boolean, styleIndex);
+        this.writeBrtCellBool(w, col, data.value as boolean, actualStyleIndex);
         break;
 
       case CellType.BLANK:
-        this.writeBrtCellBlank(w, col, styleIndex);
+        this.writeBrtCellBlank(w, col, actualStyleIndex);
         break;
 
       default:
         throw new Error('Unknown cell type: ' + data.type);
     }
+  }
+
+  private getStyleIdForFormat(data: CellData): number {
+    if (!data.hasFormatCode()) {
+      return 0;
+    }
+    if (!this.stylesWriter) {
+      return 0;
+    }
+    return this.stylesWriter.addDateFormat(data.formatCode!);
+  }
+
+  private getDateStyleIdForFormat(data: CellData): number {
+    if (!data.hasFormatCode()) {
+      return this.defaultDateStyleId;
+    }
+    if (!this.stylesWriter) {
+      return this.defaultDateStyleId;
+    }
+    return this.stylesWriter.addDateFormat(data.formatCode!);
   }
 
   private writeBrtCellRk(w: Biff12Writer, col: number, value: number, styleIndex: number): void {

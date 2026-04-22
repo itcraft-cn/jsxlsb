@@ -1,10 +1,10 @@
 import { SharedStringsTable } from '../sst/SharedStringsTable';
 export interface InternalRowHandler {
     onRowStart(rowIndex: number, columnCount: number): void;
-    onCellNumber(row: number, col: number, value: number): void;
-    onCellText(row: number, col: number, value: string): void;
-    onCellBoolean(row: number, col: number, value: boolean): void;
-    onCellBlank(row: number, col: number): void;
+    onCellNumber(row: number, col: number, value: number, styleIndex: number): void;
+    onCellText(row: number, col: number, value: string, styleIndex: number): void;
+    onCellBoolean(row: number, col: number, value: boolean, styleIndex: number): void;
+    onCellBlank(row: number, col: number, styleIndex: number): void;
     onRowEnd(rowIndex: number): void;
 }
 export declare class BatchCompleteException extends Error {
@@ -18,6 +18,7 @@ export declare class SheetReader {
     constructor(buffer: Uint8Array, sst: SharedStringsTable);
     readRows(handler: InternalRowHandler): void;
     private handleBrtRowHdr;
+    private readStyleIndex;
     private handleBrtCellRk;
     private handleBrtCellReal;
     private handleBrtCellSt;
