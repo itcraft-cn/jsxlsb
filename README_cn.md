@@ -22,7 +22,7 @@ npm install jsxlsb
 或从源码构建：
 
 ```bash
-git clone https://github.com/your-repo/jsxlsb.git
+git clone https://github.com/itcraft-cn/jsxlsb.git
 cd jsxlsb
 npm install
 npm run build
@@ -250,4 +250,4 @@ Apache License 2.0
 
 ## 相关项目
 
-- [jxlsb](https://github.com/your-repo/jxlsb) - 本库的 Java 版本
+- [jxlsb](https://github.com/itcraft-cn/jxlsb) - 本库的 Java 版本

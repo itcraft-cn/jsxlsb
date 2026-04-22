@@ -37,7 +37,7 @@
   },
   "repository": {
     "type": "git",
-    "url": ""
+    "url": "https://github.com/itcraft-cn/jsxlsb"
   },
   "dependencies": {
     "pako": "^2.1.0"

@@ -22,7 +22,7 @@ npm install jsxlsb
 Or build from source:
 
 ```bash
-git clone https://github.com/your-repo/jsxlsb.git
+git clone https://github.com/itcraft-cn/jsxlsb.git
 cd jsxlsb
 npm install
 npm run build
@@ -250,4 +250,4 @@ Apache License 2.0
 
 ## Related
 
-- [jxlsb](https://github.com/your-repo/jxlsb) - Java version of this library
+- [jxlsb](https://github.com/itcraft-cn/jxlsb) - Java version of this library
