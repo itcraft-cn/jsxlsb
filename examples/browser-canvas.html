@@ -13,15 +13,35 @@
     canvas {
       border: 1px solid #d0d0d0;
     }
+    .controls {
+      margin: 10px 0;
+    }
+    button {
+      padding: 5px 10px;
+      margin: 5px;
+      cursor: pointer;
+    }
+    #info {
+      color: #666;
+      font-size: 12px;
+      margin: 5px 0;
+    }
   </style>
 </head>
 <body>
   <h1>jsxlsb Canvas渲染示例</h1>
+  <p id="info">支持高DPI清晰渲染 + 自动列宽计算</p>
   <input type="file" id="fileInput" accept=".xlsb">
-  <canvas id="canvas" width="800" height="600"></canvas>
+  <div class="controls">
+    <button onclick="zoomIn()">放大</button>
+    <button onclick="zoomOut()">缩小</button>
+    <button onclick="resetZoom()">重置</button>
+  </div>
+  <canvas id="canvas" width="800" height="500"></canvas>
 
   <script>
     let renderer = null;
+    let currentZoom = 1;
 
     document.getElementById('fileInput').addEventListener('change', async (e) => {
       const file = e.target.files[0];
@@ -36,14 +56,31 @@
       const canvas = document.getElementById('canvas');
       renderer = new jsxlsb.CanvasRenderer();
 
-      renderer.render(canvas, reader, 0, {
-        cellWidth: 80,
-        cellHeight: 24,
-        fontFamily: 'Arial'
-      });
+      renderer.render(canvas, reader, 0);
 
       reader.close();
     });
+
+    function zoomIn() {
+      if (renderer) {
+        currentZoom = Math.min(3, currentZoom + 0.25);
+        renderer.setZoom(currentZoom);
+      }
+    }
+
+    function zoomOut() {
+      if (renderer) {
+        currentZoom = Math.max(0.5, currentZoom - 0.25);
+        renderer.setZoom(currentZoom);
+      }
+    }
+
+    function resetZoom() {
+      if (renderer) {
+        currentZoom = 1;
+        renderer.setZoom(1);
+      }
+    }
   </script>
 </body>
 </html>
