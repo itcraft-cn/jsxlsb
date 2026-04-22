@@ -1,8 +1,8 @@
 # jsxlsb
 
-A pure JavaScript library for reading and writing XLSB (Excel Binary Workbook) files.
+[中文文档](README_cn.md) | **English**
 
-[中文文档](README_cn.md)
+A pure JavaScript library for reading and writing XLSB (Excel Binary Workbook) files.
 
 ## Features
 

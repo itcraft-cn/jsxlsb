@@ -1,8 +1,8 @@
 # jsxlsb
 
-纯 JavaScript 实现的 XLSB (Excel Binary Workbook) 格式读写库。
+**中文** | [English Documentation](README.md)
 
-[English Documentation](README.md)
+纯 JavaScript 实现的 XLSB (Excel Binary Workbook) 格式读写库。
 
 ## 特性
 
