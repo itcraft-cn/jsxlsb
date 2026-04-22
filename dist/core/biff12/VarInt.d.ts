@@ -1,0 +1,15 @@
+export declare function writeVarInt(value: number): number[];
+export declare function writeVarSize(value: number): number[];
+export declare function readVarInt(buffer: Uint8Array, offset: number): number;
+export declare function readVarSize(buffer: Uint8Array, offset: number): number;
+export declare function varIntSize(value: number): number;
+export declare function varSizeSize(value: number): number;
+export declare function writeIntLE(value: number): number[];
+export declare function readIntLE(buffer: Uint8Array, offset: number): number;
+export declare function writeLongLE(value: number): number[];
+export declare function readLongLE(buffer: Uint8Array, offset: number): number;
+export declare function writeDoubleLE(value: number): number[];
+export declare function readDoubleLE(buffer: Uint8Array, offset: number): number;
+export declare function encodeUTF16LE(str: string): number[];
+export declare function decodeUTF16LE(buffer: Uint8Array, offset: number, charCount: number): string;
+export declare function writeXLWideString(str: string): number[];

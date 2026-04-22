@@ -1,0 +1,6 @@
+node_modules/
+dist/*.js
+!dist/jsxlsb.js
+*.xlsb
+*.log
+MEMORY.md

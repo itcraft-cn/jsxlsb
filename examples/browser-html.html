@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>jsxlsb - HTML渲染示例</title>
+  <script src="../dist/jsxlsb.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    #container {
+      max-height: 500px;
+      overflow: auto;
+      border: 1px solid #d0d0d0;
+    }
+  </style>
+</head>
+<body>
+  <h1>jsxlsb HTML渲染示例</h1>
+  <input type="file" id="fileInput" accept=".xlsb">
+  <div id="container"></div>
+
+  <script>
+    document.getElementById('fileInput').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = await jsxlsb.XlsbReader.fromFile(file);
+
+      const renderer = new jsxlsb.HtmlRenderer();
+      const table = renderer.render(reader, 0, {
+        maxRows: 500,
+        theme: 'light',
+        stickyHeader: true
+      });
+
+      const container = document.getElementById('container');
+      container.innerHTML = '';
+      container.appendChild(table);
+
+      reader.close();
+    });
+  </script>
+</body>
+</html>

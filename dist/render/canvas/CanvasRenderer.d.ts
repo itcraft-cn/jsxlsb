@@ -1,0 +1,30 @@
+import { CanvasConfig } from './CanvasConfig';
+import { XlsbReader } from '../../api/XlsbReader';
+export declare class CanvasRenderer {
+    private canvas;
+    private ctx;
+    private config;
+    private reader;
+    private sheetIndex;
+    private viewport;
+    private cellCache;
+    private zoom;
+    private maxRow;
+    private maxCol;
+    private scrollY;
+    private scrollX;
+    constructor(config?: Partial<CanvasConfig>);
+    render(canvas: HTMLCanvasElement, reader: XlsbReader, sheetIndex: number, config?: Partial<CanvasConfig>): void;
+    private calculateDimensions;
+    private loadCellData;
+    private draw;
+    private drawHeader;
+    private drawCells;
+    private drawGrid;
+    private setupScrollHandler;
+    setZoom(zoom: number): void;
+    scrollTo(row: number, col: number): void;
+    destroy(): void;
+    private columnToLetter;
+    private formatCellText;
+}

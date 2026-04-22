@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>jsxlsb - Canvas渲染示例</title>
+  <script src="../dist/jsxlsb.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    canvas {
+      border: 1px solid #d0d0d0;
+    }
+  </style>
+</head>
+<body>
+  <h1>jsxlsb Canvas渲染示例</h1>
+  <input type="file" id="fileInput" accept=".xlsb">
+  <canvas id="canvas" width="800" height="600"></canvas>
+
+  <script>
+    let renderer = null;
+
+    document.getElementById('fileInput').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      if (renderer) {
+        renderer.destroy();
+      }
+
+      const reader = await jsxlsb.XlsbReader.fromFile(file);
+
+      const canvas = document.getElementById('canvas');
+      renderer = new jsxlsb.CanvasRenderer();
+
+      renderer.render(canvas, reader, 0, {
+        cellWidth: 80,
+        cellHeight: 24,
+        fontFamily: 'Arial'
+      });
+
+      reader.close();
+    });
+  </script>
+</body>
+</html>
