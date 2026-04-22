@@ -2,6 +2,7 @@ import { CanvasConfig, defaultCanvasConfig } from './CanvasConfig';
 import { XlsbReader } from '../../api/XlsbReader';
 import { CellData } from '../../core/cell/CellData';
 import { CellType } from '../../core/cell/CellType';
+import { formatCell, isDateFormat } from '../../utils/FormatUtils';
 
 interface Viewport {
   startRow: number;
@@ -137,17 +138,17 @@ export class CanvasRenderer {
         const x = this.config.headerWidth + (col - this.viewport.startCol) * this.config.cellWidth * this.zoom;
         const y = this.config.headerHeight + (row - this.viewport.startRow) * this.config.cellHeight * this.zoom;
 
-        ctx.fillStyle = this.config.textColor;
+        const result = this.formatCellText(cellData);
+
+        ctx.fillStyle = result.color || this.config.textColor;
         ctx.textBaseline = 'middle';
 
-        const text = this.formatCellText(cellData);
-
-        if (cellData.isNumber()) {
+        if (cellData.isNumber() || isDateFormat(cellData.formatCode || '')) {
           ctx.textAlign = 'right';
-          ctx.fillText(text, x + this.config.cellWidth * this.zoom - 4, y + this.config.cellHeight * this.zoom / 2);
+          ctx.fillText(result.text, x + this.config.cellWidth * this.zoom - 4, y + this.config.cellHeight * this.zoom / 2);
         } else {
           ctx.textAlign = 'left';
-          ctx.fillText(text, x + 4, y + this.config.cellHeight * this.zoom / 2);
+          ctx.fillText(result.text, x + 4, y + this.config.cellHeight * this.zoom / 2);
         }
       }
     }
@@ -232,72 +233,23 @@ export class CanvasRenderer {
     return letters[firstLetter] + letters[secondLetter];
   }
 
-  private formatCellText(cellData: CellData): string {
+  private formatCellText(cellData: CellData): { text: string; color?: string } {
     if (cellData.isNumber()) {
-      const value = cellData.getNumberValue()!;
-      const formatCode = cellData.formatCode;
-
-      if (!formatCode || formatCode === 'General') {
-        return String(value);
-      }
-
-      if (formatCode.endsWith('%')) {
-        const percentValue = value * 100;
-        const decimals = this.getDecimals(formatCode);
-        return percentValue.toFixed(decimals) + '%';
-      }
-
-      if (formatCode.includes('#,##0') || formatCode.includes('#,#')) {
-        const decimals = this.getDecimals(formatCode);
-        if (formatCode.startsWith('￥') || formatCode.startsWith('$') || formatCode.startsWith('¥')) {
-          const symbol = formatCode.charAt(0);
-          return symbol + value.toLocaleString('zh-CN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-        }
-        return value.toLocaleString('zh-CN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-      }
-
-      if (formatCode.match(/^[0]+\.?[0]*$/)) {
-        const decimals = this.getDecimals(formatCode);
-        return value.toFixed(decimals);
-      }
-
-      if (formatCode.includes('E+')) {
-        return value.toExponential(2);
-      }
-
-      return String(value);
+      return formatCell(cellData.getNumberValue()!, cellData.formatCode);
     }
 
     if (cellData.isText()) {
-      return cellData.getTextValue() || '';
+      return { text: cellData.getTextValue() || '' };
     }
 
     if (cellData.isBoolean()) {
-      return cellData.getBooleanValue() ? 'TRUE' : 'FALSE';
+      return { text: cellData.getBooleanValue() ? 'TRUE' : 'FALSE' };
     }
 
     if (cellData.isDate()) {
-      const timestamp = cellData.getDateValue()!;
-      return new Date(timestamp).toLocaleDateString();
+      return formatCell(cellData.getDateValue()!, cellData.formatCode || 'm/d/yy');
     }
 
-    return '';
-  }
-
-  private getDecimals(formatCode: string): number {
-    const match = formatCode.match(/\.([0]+)/);
-    if (match) {
-      return match[1].length;
-    }
-    if (formatCode.includes('.') && !formatCode.includes('%')) {
-      return 2;
-    }
-    if (formatCode.endsWith('%') && formatCode.includes('.')) {
-      const percentMatch = formatCode.match(/\.([0]+)%/);
-      if (percentMatch) {
-        return percentMatch[1].length;
-      }
-    }
-    return 0;
+    return { text: '' };
   }
 }

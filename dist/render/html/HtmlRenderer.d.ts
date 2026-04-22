@@ -8,6 +8,4 @@ export declare class HtmlRenderer {
     renderTo(container: HTMLElement, reader: XlsbReader, sheetIndex: number, config?: Partial<HtmlConfig>): void;
     setStyles(styles: Record<string, string>): void;
     private columnToLetter;
-    private formatNumber;
-    private getDecimals;
 }

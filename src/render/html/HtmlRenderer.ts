@@ -3,6 +3,8 @@ import { CellData } from '../../core/cell/CellData';
 import { CellType } from '../../core/cell/CellType';
 import { HtmlConfig, defaultHtmlConfig } from './HtmlConfig';
 import { defaultStyles, applyStyles } from './HtmlStyles';
+import { formatCell, isDateFormat } from '../../utils/FormatUtils';
+import { excelDateToTimestamp } from '../../utils/DateUtils';
 
 export class HtmlRenderer {
   private config: HtmlConfig;
@@ -93,16 +95,19 @@ export class HtmlRenderer {
         applyStyles(td, defaultStyles.cell);
 
         if (cellData.isNumber()) {
-          applyStyles(td, defaultStyles.numberCell);
-          td.textContent = self.formatNumber(cellData.getNumberValue()!, cellData.formatCode);
+          const result = formatCell(cellData.getNumberValue()!, cellData.formatCode);
+          td.textContent = result.text;
+          if (result.color) {
+            td.style.color = result.color;
+          }
         } else if (cellData.isText()) {
           td.textContent = cellData.getTextValue() || '';
         } else if (cellData.isBoolean()) {
           td.textContent = cellData.getBooleanValue() ? 'TRUE' : 'FALSE';
         } else if (cellData.isDate()) {
-          const timestamp = cellData.getDateValue()!;
-          const date = new Date(timestamp);
-          td.textContent = date.toLocaleDateString();
+          const excelDate = cellData.getDateValue()!;
+          const result = formatCell(excelDate, cellData.formatCode || 'm/d/yy');
+          td.textContent = result.text;
         } else {
           td.textContent = '';
         }
@@ -137,54 +142,5 @@ export class HtmlRenderer {
     const firstLetter = Math.floor(col / 26) - 1;
     const secondLetter = col % 26;
     return letters[firstLetter] + letters[secondLetter];
-  }
-
-  private formatNumber(value: number, formatCode?: string): string {
-    if (!formatCode || formatCode === 'General') {
-      return String(value);
-    }
-
-    if (formatCode.endsWith('%')) {
-      const percentValue = value * 100;
-      const decimals = this.getDecimals(formatCode);
-      return percentValue.toFixed(decimals) + '%';
-    }
-
-    if (formatCode.includes('#,##0') || formatCode.includes('#,#')) {
-      const decimals = this.getDecimals(formatCode);
-      if (formatCode.startsWith('￥') || formatCode.startsWith('$') || formatCode.startsWith('¥')) {
-        const symbol = formatCode.charAt(0);
-        return symbol + value.toLocaleString('zh-CN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-      }
-      return value.toLocaleString('zh-CN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-    }
-
-    if (formatCode.match(/^[0]+\.?[0]*$/)) {
-      const decimals = this.getDecimals(formatCode);
-      return value.toFixed(decimals);
-    }
-
-    if (formatCode.includes('E+')) {
-      return value.toExponential(2);
-    }
-
-    return String(value);
-  }
-
-  private getDecimals(formatCode: string): number {
-    const match = formatCode.match(/\.([0]+)/);
-    if (match) {
-      return match[1].length;
-    }
-    if (formatCode.includes('.') && !formatCode.includes('%')) {
-      return 2;
-    }
-    if (formatCode.endsWith('%') && formatCode.includes('.')) {
-      const percentMatch = formatCode.match(/\.([0]+)%/);
-      if (percentMatch) {
-        return percentMatch[1].length;
-      }
-    }
-    return 0;
   }
 }

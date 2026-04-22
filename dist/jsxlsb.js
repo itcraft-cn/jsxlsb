@@ -7476,6 +7476,10 @@
       const days = (timestamp - EXCEL_EPOCH_MILLIS) / (24 * 60 * 60 * 1000);
       return days + 1.0;
   }
+  function excelDateToTimestamp(excelDate) {
+      const days = excelDate - 1.0;
+      return Math.round(days * 24 * 60 * 60 * 1000 + EXCEL_EPOCH_MILLIS);
+  }
 
   const MIN_RK_INTEGER = -536870912;
   const MAX_RK_INTEGER = 536870911;
@@ -8876,6 +8880,105 @@
       }
   }
 
+  const DATE_FORMAT_CHARS = ['y', 'm', 'd', 'h', 's', 'a', 'p', 'A', 'P', 'M', 'D', 'Y', 'H', 'S'];
+  function isDateFormat(formatCode) {
+      if (!formatCode)
+          return false;
+      const lower = formatCode.toLowerCase();
+      return DATE_FORMAT_CHARS.some(c => lower.includes(c.toLowerCase())) &&
+          !lower.includes('0') &&
+          !lower.includes('#') &&
+          !lower.includes('%');
+  }
+  function formatCell(value, formatCode) {
+      if (!formatCode || formatCode === 'General') {
+          return { text: String(value) };
+      }
+      if (isDateFormat(formatCode)) {
+          return formatExcelDate(value, formatCode);
+      }
+      if (formatCode.endsWith('%')) {
+          const percentValue = value * 100;
+          const decimals = getDecimals(formatCode);
+          return { text: percentValue.toFixed(decimals) + '%' };
+      }
+      if (formatCode.includes('[Red]') && value < 0) {
+          const positiveFormat = formatCode.split(';')[0].replace('[Red]', '');
+          const absValue = Math.abs(value);
+          const formatted = formatNumber(absValue, positiveFormat);
+          return { text: '-' + formatted, color: 'red' };
+      }
+      if (formatCode.includes('#,##0') || formatCode.includes('#,#')) {
+          const formatted = formatNumber(value, formatCode);
+          return { text: formatted };
+      }
+      if (formatCode.match(/^[0]+\.?[0]*$/)) {
+          const decimals = getDecimals(formatCode);
+          return { text: value.toFixed(decimals) };
+      }
+      if (formatCode.includes('E+')) {
+          return { text: value.toExponential(2) };
+      }
+      return { text: String(value) };
+  }
+  function formatNumber(value, formatCode) {
+      const decimals = getDecimals(formatCode);
+      if (formatCode.startsWith('￥') || formatCode.startsWith('$') || formatCode.startsWith('¥')) {
+          const symbol = formatCode.charAt(0);
+          return symbol + value.toLocaleString('zh-CN', {
+              minimumFractionDigits: decimals,
+              maximumFractionDigits: decimals
+          });
+      }
+      return value.toLocaleString('zh-CN', {
+          minimumFractionDigits: decimals,
+          maximumFractionDigits: decimals
+      });
+  }
+  function formatExcelDate(excelDate, formatCode) {
+      const timestamp = excelDateToTimestamp(excelDate);
+      const date = new Date(timestamp);
+      const result = formatCode
+          .replace(/yyyy/gi, String(date.getFullYear()))
+          .replace(/yy/gi, String(date.getFullYear()).slice(-2))
+          .replace(/mmmm/gi, getMonthName(date.getMonth()))
+          .replace(/mmm/gi, getShortMonthName(date.getMonth()))
+          .replace(/mm/gi, pad2(date.getMonth() + 1))
+          .replace(/m/gi, String(date.getMonth() + 1))
+          .replace(/dd/gi, pad2(date.getDate()))
+          .replace(/d/gi, String(date.getDate()))
+          .replace(/hh/gi, pad2(date.getHours()))
+          .replace(/h/gi, String(date.getHours()))
+          .replace(/ss/gi, pad2(date.getSeconds()))
+          .replace(/s/gi, String(date.getSeconds()))
+          .replace(/AM\/PM/gi, date.getHours() >= 12 ? 'PM' : 'AM')
+          .replace(/am\/pm/gi, date.getHours() >= 12 ? 'pm' : 'am');
+      return { text: result };
+  }
+  function getDecimals(formatCode) {
+      const match = formatCode.match(/\.([0]+)/);
+      if (match) {
+          return match[1].length;
+      }
+      if (formatCode.includes('.') && !formatCode.includes('%')) {
+          return 2;
+      }
+      return 0;
+  }
+  function getMonthName(month) {
+      const names = ['January', 'February', 'March', 'April', 'May', 'June',
+          'July', 'August', 'September', 'October', 'November', 'December'];
+      return names[month];
+  }
+  function getShortMonthName(month) {
+      const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return names[month];
+  }
+  function pad2(n) {
+      return n < 10 ? '0' + n : String(n);
+  }
+
   const defaultHtmlConfig = {
       maxRows: 1000,
       maxColumns: 50,
@@ -8904,9 +9007,6 @@
           'border': '1px solid #d0d0d0',
           'padding': '4px 8px',
           'text-align': 'left'
-      },
-      numberCell: {
-          'text-align': 'right'
       },
       darkTheme: {
           table: {
@@ -8992,8 +9092,11 @@
                   td.dataset.col = String(col);
                   applyStyles(td, defaultStyles.cell);
                   if (cellData.isNumber()) {
-                      applyStyles(td, defaultStyles.numberCell);
-                      td.textContent = self.formatNumber(cellData.getNumberValue(), cellData.formatCode);
+                      const result = formatCell(cellData.getNumberValue(), cellData.formatCode);
+                      td.textContent = result.text;
+                      if (result.color) {
+                          td.style.color = result.color;
+                      }
                   }
                   else if (cellData.isText()) {
                       td.textContent = cellData.getTextValue() || '';
@@ -9002,9 +9105,9 @@
                       td.textContent = cellData.getBooleanValue() ? 'TRUE' : 'FALSE';
                   }
                   else if (cellData.isDate()) {
-                      const timestamp = cellData.getDateValue();
-                      const date = new Date(timestamp);
-                      td.textContent = date.toLocaleDateString();
+                      const excelDate = cellData.getDateValue();
+                      const result = formatCell(excelDate, cellData.formatCode || 'm/d/yy');
+                      td.textContent = result.text;
                   }
                   else {
                       td.textContent = '';
@@ -9034,48 +9137,6 @@
           const firstLetter = Math.floor(col / 26) - 1;
           const secondLetter = col % 26;
           return letters[firstLetter] + letters[secondLetter];
-      }
-      formatNumber(value, formatCode) {
-          if (!formatCode || formatCode === 'General') {
-              return String(value);
-          }
-          if (formatCode.endsWith('%')) {
-              const percentValue = value * 100;
-              const decimals = this.getDecimals(formatCode);
-              return percentValue.toFixed(decimals) + '%';
-          }
-          if (formatCode.includes('#,##0') || formatCode.includes('#,#')) {
-              const decimals = this.getDecimals(formatCode);
-              if (formatCode.startsWith('￥') || formatCode.startsWith('$') || formatCode.startsWith('¥')) {
-                  const symbol = formatCode.charAt(0);
-                  return symbol + value.toLocaleString('zh-CN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-              }
-              return value.toLocaleString('zh-CN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-          }
-          if (formatCode.match(/^[0]+\.?[0]*$/)) {
-              const decimals = this.getDecimals(formatCode);
-              return value.toFixed(decimals);
-          }
-          if (formatCode.includes('E+')) {
-              return value.toExponential(2);
-          }
-          return String(value);
-      }
-      getDecimals(formatCode) {
-          const match = formatCode.match(/\.([0]+)/);
-          if (match) {
-              return match[1].length;
-          }
-          if (formatCode.includes('.') && !formatCode.includes('%')) {
-              return 2;
-          }
-          if (formatCode.endsWith('%') && formatCode.includes('.')) {
-              const percentMatch = formatCode.match(/\.([0]+)%/);
-              if (percentMatch) {
-                  return percentMatch[1].length;
-              }
-          }
-          return 0;
       }
   }
 
@@ -9193,16 +9254,16 @@
                       continue;
                   const x = this.config.headerWidth + (col - this.viewport.startCol) * this.config.cellWidth * this.zoom;
                   const y = this.config.headerHeight + (row - this.viewport.startRow) * this.config.cellHeight * this.zoom;
-                  ctx.fillStyle = this.config.textColor;
+                  const result = this.formatCellText(cellData);
+                  ctx.fillStyle = result.color || this.config.textColor;
                   ctx.textBaseline = 'middle';
-                  const text = this.formatCellText(cellData);
-                  if (cellData.isNumber()) {
+                  if (cellData.isNumber() || isDateFormat(cellData.formatCode || '')) {
                       ctx.textAlign = 'right';
-                      ctx.fillText(text, x + this.config.cellWidth * this.zoom - 4, y + this.config.cellHeight * this.zoom / 2);
+                      ctx.fillText(result.text, x + this.config.cellWidth * this.zoom - 4, y + this.config.cellHeight * this.zoom / 2);
                   }
                   else {
                       ctx.textAlign = 'left';
-                      ctx.fillText(text, x + 4, y + this.config.cellHeight * this.zoom / 2);
+                      ctx.fillText(result.text, x + 4, y + this.config.cellHeight * this.zoom / 2);
                   }
               }
           }
@@ -9276,60 +9337,18 @@
       }
       formatCellText(cellData) {
           if (cellData.isNumber()) {
-              const value = cellData.getNumberValue();
-              const formatCode = cellData.formatCode;
-              if (!formatCode || formatCode === 'General') {
-                  return String(value);
-              }
-              if (formatCode.endsWith('%')) {
-                  const percentValue = value * 100;
-                  const decimals = this.getDecimals(formatCode);
-                  return percentValue.toFixed(decimals) + '%';
-              }
-              if (formatCode.includes('#,##0') || formatCode.includes('#,#')) {
-                  const decimals = this.getDecimals(formatCode);
-                  if (formatCode.startsWith('￥') || formatCode.startsWith('$') || formatCode.startsWith('¥')) {
-                      const symbol = formatCode.charAt(0);
-                      return symbol + value.toLocaleString('zh-CN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-                  }
-                  return value.toLocaleString('zh-CN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-              }
-              if (formatCode.match(/^[0]+\.?[0]*$/)) {
-                  const decimals = this.getDecimals(formatCode);
-                  return value.toFixed(decimals);
-              }
-              if (formatCode.includes('E+')) {
-                  return value.toExponential(2);
-              }
-              return String(value);
+              return formatCell(cellData.getNumberValue(), cellData.formatCode);
           }
           if (cellData.isText()) {
-              return cellData.getTextValue() || '';
+              return { text: cellData.getTextValue() || '' };
           }
           if (cellData.isBoolean()) {
-              return cellData.getBooleanValue() ? 'TRUE' : 'FALSE';
+              return { text: cellData.getBooleanValue() ? 'TRUE' : 'FALSE' };
           }
           if (cellData.isDate()) {
-              const timestamp = cellData.getDateValue();
-              return new Date(timestamp).toLocaleDateString();
+              return formatCell(cellData.getDateValue(), cellData.formatCode || 'm/d/yy');
           }
-          return '';
-      }
-      getDecimals(formatCode) {
-          const match = formatCode.match(/\.([0]+)/);
-          if (match) {
-              return match[1].length;
-          }
-          if (formatCode.includes('.') && !formatCode.includes('%')) {
-              return 2;
-          }
-          if (formatCode.endsWith('%') && formatCode.includes('.')) {
-              const percentMatch = formatCode.match(/\.([0]+)%/);
-              if (percentMatch) {
-                  return percentMatch[1].length;
-              }
-          }
-          return 0;
+          return { text: '' };
       }
   }
 
@@ -9347,6 +9366,10 @@
   exports.XlsbWriter = XlsbWriter;
   exports.ZipReader = ZipReader;
   exports.ZipWriter = ZipWriter;
+  exports.excelDateToTimestamp = excelDateToTimestamp;
+  exports.formatCell = formatCell;
+  exports.isDateFormat = isDateFormat;
+  exports.timestampToExcelDate = timestampToExcelDate;
   exports.version = version;
 
 }));

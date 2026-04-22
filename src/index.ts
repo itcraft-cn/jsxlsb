@@ -12,6 +12,9 @@ export { ZipReader } from './core/container/ZipReader';
 export { StylesReader } from './core/style/StylesReader';
 export { StylesWriter } from './core/style/StylesWriter';
 
+export { formatCell, isDateFormat } from './utils/FormatUtils';
+export { timestampToExcelDate, excelDateToTimestamp } from './utils/DateUtils';
+
 export const version = '1.0.0';
 
 import { HtmlRenderer } from './render/html/HtmlRenderer';
