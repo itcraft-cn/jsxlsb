@@ -7,13 +7,12 @@ export declare class ZipWriter {
     addEntry(name: string, data: Uint8Array): void;
     toBlob(): Promise<Blob>;
     toUint8Array(): Uint8Array;
-    private compress;
-    private createLocalFileHeaderArray;
-    private createCentralDirectoryHeaderArray;
-    private createEndOfCentralDirectoryArray;
-    private writeUInt16LE;
-    private writeUInt32LE;
-    private encodeString;
+    private createLocalFileHeader;
+    private createDataDescriptor;
+    private createCentralDirectoryHeader;
+    private createEndOfCentralDirectory;
+    private calculateCRC32;
+    private getCRC32Table;
     clear(): void;
     getEntryCount(): number;
 }

@@ -25,8 +25,11 @@
   "author": "cn.itcraft",
   "license": "Apache-2.0",
   "devDependencies": {
+    "@rollup/plugin-commonjs": "^29.0.2",
+    "@rollup/plugin-node-resolve": "^16.0.3",
     "@rollup/plugin-typescript": "^11.1.6",
     "@types/node": "^20.11.0",
+    "@types/pako": "^2.0.4",
     "rollup": "^4.9.0",
     "tslib": "^2.8.1",
     "typescript": "^5.3.3",
@@ -35,5 +38,8 @@
   "repository": {
     "type": "git",
     "url": ""
+  },
+  "dependencies": {
+    "pako": "^2.1.0"
   }
 }

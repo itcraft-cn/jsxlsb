@@ -14,15 +14,5 @@ export declare class ZipReader {
     getEntry(name: string): ZipEntryInfo | null;
     getEntryData(name: string): Uint8Array | null;
     getAllEntryNames(): string[];
-    private decompress;
-    private decompressPureJS;
-    private parseDynamicHuffman;
-    private buildHuffmanTables;
-    private getLengthBase;
-    private getLengthExtraBits;
-    private getDistanceBase;
-    private getDistanceExtraBits;
-    private readUInt16LE;
-    private readUInt32LE;
     private decodeString;
 }
