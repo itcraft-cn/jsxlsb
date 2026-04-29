@@ -6,38 +6,9 @@ const TOTAL_ROWS = 100000;
 const COLUMN_COUNT = 10;
 const PAGE_SIZE = 1000;
 
-function createCell(row, col) {
-    switch (col) {
-        case 0: return CellData.text('Name-' + row);
-        case 1: return CellData.text('Category-' + (row % 100));
-        case 2: return CellData.text('Region-' + (row % 10));
-        case 3: return CellData.number(row);
-        case 4: return CellData.number(row * 10);
-        case 5: return CellData.number(row * 100);
-        case 6: return CellData.number(row % 1000);
-        case 7: return CellData.number(row * 1.5);
-        case 8: return CellData.number(row * 2.345);
-        case 9: return CellData.number(row / 7.0);
-        default: return CellData.blank();
-    }
-}
-
-function createBatchData(start, count) {
-    const batch = [];
-    for (let i = 0; i < count; i++) {
-        const row = start + i;
-        const rowData = [];
-        for (let col = 0; col < COLUMN_COUNT; col++) {
-            rowData.push(createCell(row, col));
-        }
-        batch.push(rowData);
-    }
-    return batch;
-}
-
 async function runBenchmark() {
     console.log('\n╔══════════════════════════════════════════════════════════════╗');
-    console.log('║         jsxlsb 性能基准测试 (100万行 × 10字段)                ║');
+    console.log('║         jsxlsb 性能基准测试 (10万行 × 10字段)                 ║');
     console.log('║         字段类型: 3字符串 + 4整数 + 3浮点数                   ║');
     console.log('╚══════════════════════════════════════════════════════════════╝\n');
     
