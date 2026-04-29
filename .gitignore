@@ -1,6 +1,5 @@
 node_modules/
-dist/*.js
-!dist/jsxlsb.js
+dist/
 *.xlsb
 !examples/templates/*.xlsb
 *.log
