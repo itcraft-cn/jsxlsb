@@ -1,5 +1,6 @@
 import { CellData } from '../cell/CellData';
 import { SharedStringsTable } from '../sst/SharedStringsTable';
+import { CellInfo, MergeCell } from '../template/SheetParser';
 export interface CellDataSupplier {
     get(row: number, col: number): CellData | null;
 }
@@ -30,4 +31,11 @@ export declare class SheetWriter {
     private writeViewRecords;
     private writePageSetupRecords;
     getStreamingColumnCount(): number;
+    writeSheetWithTemplate(supplier: CellDataSupplier, rowCount: number, columnCount: number, startRow: number, startCol: number, templateCells: CellInfo[], templateMaxRow: number, templateMaxCol: number, mergeCells: MergeCell[]): Uint8Array;
+    private writeTemplateCellsForRow;
+    private writeFillCellsForRow;
+    private isOutsideFillArea;
+    private writeCellWithStyle;
+    private writeSheetFooterWithMerge;
+    private writeMergeCells;
 }

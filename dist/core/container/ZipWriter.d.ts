@@ -5,6 +5,7 @@ export interface ZipEntryData {
 export declare class ZipWriter {
     private entries;
     addEntry(name: string, data: Uint8Array): void;
+    hasEntry(name: string): boolean;
     toBlob(): Promise<Blob>;
     toUint8Array(): Uint8Array;
     private createLocalFileHeader;

@@ -18,6 +18,10 @@ export class ZipReader {
     this.parse();
   }
 
+  getBuffer(): Uint8Array {
+    return this.buffer;
+  }
+
   private parse(): void {
     let pos = this.buffer.length - 22;
 

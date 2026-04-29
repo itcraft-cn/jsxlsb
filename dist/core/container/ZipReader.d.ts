@@ -10,6 +10,7 @@ export declare class ZipReader {
     private entries;
     private entryMap;
     constructor(buffer: Uint8Array);
+    getBuffer(): Uint8Array;
     private parse;
     getEntry(name: string): ZipEntryInfo | null;
     getEntryData(name: string): Uint8Array | null;

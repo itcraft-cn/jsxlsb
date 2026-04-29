@@ -10,6 +10,8 @@ export { ZipWriter } from './core/container/ZipWriter';
 export { ZipReader } from './core/container/ZipReader';
 export { StylesReader } from './core/style/StylesReader';
 export { StylesWriter } from './core/style/StylesWriter';
+export { TemplateReader } from './core/template/TemplateReader';
+export { SheetParser, CellInfo, MergeCell, MarkerPosition } from './core/template/SheetParser';
 export { formatCell, isDateFormat } from './utils/FormatUtils';
 export { timestampToExcelDate, excelDateToTimestamp } from './utils/DateUtils';
 export declare const version = "1.0.0";

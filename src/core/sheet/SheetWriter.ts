@@ -4,6 +4,7 @@ import { SharedStringsTable } from '../sst/SharedStringsTable';
 import { Biff12Writer } from '../biff12/Biff12Writer';
 import { RecordTypes } from '../biff12/RecordTypes';
 import { timestampToExcelDate } from '../../utils/DateUtils';
+import { CellInfo, MergeCell } from '../template/SheetParser';
 
 const MIN_RK_INTEGER = -536870912;
 const MAX_RK_INTEGER = 536870911;
@@ -309,5 +310,113 @@ export class SheetWriter {
 
   getStreamingColumnCount(): number {
     return this.streamingColumnCount;
+  }
+
+  writeSheetWithTemplate(
+    supplier: CellDataSupplier,
+    rowCount: number,
+    columnCount: number,
+    startRow: number,
+    startCol: number,
+    templateCells: CellInfo[],
+    templateMaxRow: number,
+    templateMaxCol: number,
+    mergeCells: MergeCell[]
+  ): Uint8Array {
+    const totalRows = Math.max(templateMaxRow + 1, startRow + rowCount);
+    const totalCols = Math.max(templateMaxCol + 1, startCol + columnCount);
+
+    const estimatedSize = totalRows * totalCols * 30 + 1024;
+    const w = new Biff12Writer();
+
+    this.writeSheetHeader(w, totalRows, totalCols);
+    w.writeEmptyRecord(RecordTypes.BrtBeginSheetData);
+
+    for (let row = 0; row < totalRows; row++) {
+      this.writeBrtRowHdr(w, row, totalCols);
+      this.writeTemplateCellsForRow(w, row, templateCells, startRow, rowCount, startCol, columnCount);
+      this.writeFillCellsForRow(w, row, supplier, startRow, rowCount, startCol, columnCount);
+    }
+
+    this.writeSheetFooterWithMerge(w, mergeCells);
+
+    return w.toUint8Array();
+  }
+
+  private writeTemplateCellsForRow(
+    w: Biff12Writer,
+    row: number,
+    templateCells: CellInfo[],
+    startRow: number,
+    rowCount: number,
+    startCol: number,
+    columnCount: number
+  ): void {
+    for (const cell of templateCells) {
+      if (cell.row === row && this.isOutsideFillArea(cell.row, cell.col, startRow, rowCount, startCol, columnCount)) {
+        this.writeCellWithStyle(w, cell.row, cell.col, cell.data, cell.styleIndex);
+      }
+    }
+  }
+
+  private writeFillCellsForRow(
+    w: Biff12Writer,
+    row: number,
+    supplier: CellDataSupplier,
+    startRow: number,
+    rowCount: number,
+    startCol: number,
+    columnCount: number
+  ): void {
+    if (row >= startRow && row < startRow + rowCount) {
+      for (let col = startCol; col < startCol + columnCount; col++) {
+        const data = supplier.get(row, col);
+        if (data && data.type && data.type !== CellType.BLANK) {
+          this.writeCell(w, row, col, data);
+        }
+      }
+    }
+  }
+
+  private isOutsideFillArea(
+    cellRow: number,
+    cellCol: number,
+    startRow: number,
+    rowCount: number,
+    startCol: number,
+    columnCount: number
+  ): boolean {
+    return cellRow < startRow || cellRow >= startRow + rowCount ||
+           cellCol < startCol || cellCol >= startCol + columnCount;
+  }
+
+  private writeCellWithStyle(w: Biff12Writer, row: number, col: number, data: CellData, styleIndex: number): void {
+    this.writeCell(w, row, col, data, styleIndex);
+  }
+
+  private writeSheetFooterWithMerge(w: Biff12Writer, mergeCells: MergeCell[]): void {
+    w.writeEmptyRecord(RecordTypes.BrtEndSheetData);
+
+    if (mergeCells && mergeCells.length > 0) {
+      this.writeMergeCells(w, mergeCells);
+    }
+
+    this.writePageSetupRecords(w);
+    w.writeEmptyRecord(RecordTypes.BrtEndSheet);
+  }
+
+  private writeMergeCells(w: Biff12Writer, mergeCells: MergeCell[]): void {
+    w.writeRecordHeader(RecordTypes.BrtBeginMergeCells, 4);
+    w.writeIntLE(mergeCells.length);
+
+    for (const merge of mergeCells) {
+      w.writeRecordHeader(RecordTypes.BrtMergeCell, 16);
+      w.writeIntLE(merge.rowFirst);
+      w.writeIntLE(merge.rowLast);
+      w.writeIntLE(merge.colFirst);
+      w.writeIntLE(merge.colLast);
+    }
+
+    w.writeEmptyRecord(RecordTypes.BrtEndMergeCells);
   }
 }

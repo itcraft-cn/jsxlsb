@@ -12,6 +12,10 @@ export class ZipWriter {
     this.entries.push({ name, data });
   }
 
+  hasEntry(name: string): boolean {
+    return this.entries.some(e => e.name === name);
+  }
+
   async toBlob(): Promise<Blob> {
     const result = this.toUint8Array();
     return new Blob([result.buffer as ArrayBuffer], { type: 'application/zip' });
