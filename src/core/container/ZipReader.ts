@@ -132,6 +132,10 @@ export class ZipReader {
     return this.entries.map(e => e.name);
   }
 
+  getAllEntries(): ZipEntryInfo[] {
+    return this.entries;
+  }
+
   private decodeString(offset: number, length: number): string {
     const bytes = this.buffer.slice(offset, offset + length);
     return new TextDecoder().decode(bytes);

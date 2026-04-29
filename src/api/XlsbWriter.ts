@@ -84,25 +84,37 @@ export class XlsbWriter {
 
     const templateContainer = new ZipReader(this.templateReader.getContainer().getBuffer());
 
-    const stylesBuffer = templateContainer.getEntryData('xl/styles.bin');
-    if (stylesBuffer) {
-      this.container.addEntry('xl/styles.bin', stylesBuffer);
+    const allEntries = templateContainer.getAllEntries();
+
+    const skipPatterns = [
+      /^xl\/worksheets\/sheet\d+\.bin$/,
+      /^xl\/worksheets\/$/,
+      'xl/sharedStrings.bin',
+      'xl/workbook.bin',
+      'xl/_rels/workbook.bin.rels'
+    ];
+
+    for (const entry of allEntries) {
+      const name = entry.name;
+
+      if (skipPatterns.some(p => typeof p === 'string' ? name === p : p.test(name))) {
+        continue;
+      }
+
+      const data = templateContainer.getEntryData(name);
+      if (data) {
+        this.container.addEntry(name, data);
+      } else if (name.endsWith('/')) {
+        this.container.addEntry(name, new Uint8Array(0));
+      }
     }
 
-    const themeBuffer = templateContainer.getEntryData('xl/theme/theme1.xml');
-    if (themeBuffer) {
-      this.container.addEntry('xl/theme/theme1.xml', themeBuffer);
+    const sheetInfos = this.templateReader.getSheetInfos();
+    for (const info of sheetInfos) {
+      this.workbookWriter.addSheet(info.name);
     }
 
-    const appBuffer = templateContainer.getEntryData('docProps/app.xml');
-    if (appBuffer) {
-      this.container.addEntry('docProps/app.xml', appBuffer);
-    }
-
-    const coreBuffer = templateContainer.getEntryData('docProps/core.xml');
-    if (coreBuffer) {
-      this.container.addEntry('docProps/core.xml', coreBuffer);
-    }
+    this.sheetCount = this.templateSheetCount;
   }
 
   writeBatch(sheetName: string, data: CellData[][]): void {
@@ -343,7 +355,13 @@ export class XlsbWriter {
       throw new Error('No data filled in template mode');
     }
 
-    this.writeContainerStructure();
+    if (!this.isTemplateMode) {
+      this.writeContainerStructure();
+    }
+
+    if (this.isTemplateMode) {
+      this.writeTemplateContainerStructure();
+    }
 
     const result = this.container.toUint8Array();
 
@@ -358,53 +376,42 @@ export class XlsbWriter {
     return result;
   }
 
+private writeTemplateContainerStructure(): void {
+    const templateContainer = new ZipReader(this.templateReader!.getContainer().getBuffer());
+
+    this.container.addEntry('xl/workbook.bin', this.workbookWriter.toBiff12Bytes());
+
+    const workbookRels = RelsGenerator.generateWorkbookRels(this.templateSheetCount, this.sharedStrings.getCount() > 0);
+    this.container.addEntry('xl/_rels/workbook.bin.rels', RelsGenerator.toUint8Array(workbookRels));
+
+    if (this.sharedStrings.getCount() > 0) {
+      this.container.addEntry('xl/sharedStrings.bin', this.sharedStrings.toBiff12Bytes());
+    }
+  }
+
   private writeContainerStructure(): void {
-    if (this.isTemplateMode) {
-      const ct = new ContentTypes();
-      ct.addOverride('/xl/workbook.bin', 'application/vnd.ms-excel.workbook');
-      for (let i = 1; i <= this.templateSheetCount; i++) {
-        ct.addOverride(`/xl/worksheets/sheet${i}.bin`, 'application/vnd.ms-excel.worksheet');
-      }
-      if (this.container.hasEntry('xl/styles.bin')) {
-        ct.addOverride('/xl/styles.bin', 'application/vnd.ms-excel.styles');
-      }
-      if (this.container.hasEntry('xl/theme/theme1.xml')) {
-        ct.addOverride('/xl/theme/theme1.xml', 'application/vnd.openxmlformats-officedocument.theme+xml');
-      }
-      this.container.addEntry('[Content_Types].xml', ct.toUint8Array());
+    const ct = new ContentTypes();
+    ct.addOverride('/docProps/app.xml', 'application/vnd.openxmlformats-officedocument.extended-properties+xml');
+    ct.addOverride('/docProps/core.xml', 'application/vnd.openxmlformats-package.core-properties+xml');
+    ct.addOverride('/xl/sharedStrings.bin', 'application/vnd.ms-excel.sharedStrings');
+    ct.addOverride('/xl/styles.bin', 'application/vnd.ms-excel.styles');
+    ct.addOverride('/xl/theme/theme1.xml', 'application/vnd.openxmlformats-officedocument.theme+xml');
+    for (let i = 1; i <= this.sheetCount; i++) {
+      ct.addOverride(`/xl/worksheets/sheet${i}.bin`, 'application/vnd.ms-excel.worksheet');
+    }
+    this.container.addEntry('[Content_Types].xml', ct.toUint8Array());
 
-      this.container.addEntry('_rels/.rels', RelsGenerator.toUint8Array(RelsGenerator.generateRootRels()));
-      this.container.addEntry('xl/workbook.bin', this.workbookWriter.toBiff12Bytes());
-      this.container.addEntry('xl/_rels/workbook.bin.rels',
-        RelsGenerator.toUint8Array(RelsGenerator.generateWorkbookRels(this.templateSheetCount, true)));
+    this.container.addEntry('_rels/.rels', RelsGenerator.toUint8Array(RelsGenerator.generateRootRels()));
+    this.container.addEntry('docProps/app.xml', XmlGenerator.toUint8Array(XmlGenerator.generateAppXml(this.sheetCount)));
+    this.container.addEntry('docProps/core.xml', XmlGenerator.toUint8Array(XmlGenerator.generateCoreXml()));
+    this.container.addEntry('xl/workbook.bin', this.workbookWriter.toBiff12Bytes());
+    this.container.addEntry('xl/styles.bin', this.stylesWriter.toBiff12Bytes());
+    this.container.addEntry('xl/theme/theme1.xml', XmlGenerator.toUint8Array(XmlGenerator.generateThemeXml()));
+    this.container.addEntry('xl/_rels/workbook.bin.rels',
+      RelsGenerator.toUint8Array(RelsGenerator.generateWorkbookRels(this.sheetCount, this.sharedStrings.getCount() > 0)));
 
-      if (this.sharedStrings.getCount() > 0) {
-        this.container.addEntry('xl/sharedStrings.bin', this.sharedStrings.toBiff12Bytes());
-      }
-    } else {
-      const ct = new ContentTypes();
-      ct.addOverride('/docProps/app.xml', 'application/vnd.openxmlformats-officedocument.extended-properties+xml');
-      ct.addOverride('/docProps/core.xml', 'application/vnd.openxmlformats-package.core-properties+xml');
-      ct.addOverride('/xl/sharedStrings.bin', 'application/vnd.ms-excel.sharedStrings');
-      ct.addOverride('/xl/styles.bin', 'application/vnd.ms-excel.styles');
-      ct.addOverride('/xl/theme/theme1.xml', 'application/vnd.openxmlformats-officedocument.theme+xml');
-      for (let i = 1; i <= this.sheetCount; i++) {
-        ct.addOverride(`/xl/worksheets/sheet${i}.bin`, 'application/vnd.ms-excel.worksheet');
-      }
-      this.container.addEntry('[Content_Types].xml', ct.toUint8Array());
-
-      this.container.addEntry('_rels/.rels', RelsGenerator.toUint8Array(RelsGenerator.generateRootRels()));
-      this.container.addEntry('docProps/app.xml', XmlGenerator.toUint8Array(XmlGenerator.generateAppXml(this.sheetCount)));
-      this.container.addEntry('docProps/core.xml', XmlGenerator.toUint8Array(XmlGenerator.generateCoreXml()));
-      this.container.addEntry('xl/workbook.bin', this.workbookWriter.toBiff12Bytes());
-      this.container.addEntry('xl/styles.bin', this.stylesWriter.toBiff12Bytes());
-      this.container.addEntry('xl/theme/theme1.xml', XmlGenerator.toUint8Array(XmlGenerator.generateThemeXml()));
-      this.container.addEntry('xl/_rels/workbook.bin.rels',
-        RelsGenerator.toUint8Array(RelsGenerator.generateWorkbookRels(this.sheetCount, this.sharedStrings.getCount() > 0)));
-
-      if (this.sharedStrings.getCount() > 0) {
-        this.container.addEntry('xl/sharedStrings.bin', this.sharedStrings.toBiff12Bytes());
-      }
+    if (this.sharedStrings.getCount() > 0) {
+      this.container.addEntry('xl/sharedStrings.bin', this.sharedStrings.toBiff12Bytes());
     }
   }
 
