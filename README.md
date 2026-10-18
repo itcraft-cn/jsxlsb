@@ -1,31 +1,31 @@
 # jsxlsb
 
-[中文文档](README_cn.md) | **English**
+**中文** | [English](README_en.md)
 
-A pure JavaScript library for reading and writing XLSB (Excel Binary Workbook) files.
+纯 JavaScript 实现的 XLSB (Excel Binary Workbook) 格式读写库。
 
-## Design Positioning
+## 设计定位
 
-This library has a fixed starting point: **high-performance data output (writing)**. Reading was originally meant only for consuming templates. But once reading was in place, high-performance reading became a natural extension of the same core.
+本库的出发点始终明确：**做高性能的数据输出（写入）**。读取最初只是为了读模板；但读一旦做了，高性能读也就顺理成章地成为同一内核的自然延伸。
 
-Viewed from this narrow, output-oriented angle, XLSX is simply not needed — XLSB is more than capable.
+站在这个窄应用视角看，XLSX 其实并不需要——XLSB 已经非常能打。
 
-## Features
+## 特性
 
-- **Pure JavaScript** - No external dependencies (pako bundled for ZIP compression)
-- **High Performance** - BIFF12 binary format, smaller files and faster I/O
-- **Cross Platform** - Works in both Node.js and browser environments
-- **Full Functionality** - Read, write, and render capabilities
-- **High DPI Support** - Canvas renderer supports retina displays
-- **Auto Column Width** - Automatically calculates column widths based on content
+- **纯 JavaScript** - 无外部依赖（pako 打包用于 ZIP 压缩）
+- **高性能** - 基于 BIFF12 二进制格式，文件更小、读写更快
+- **跨平台** - 同时支持 Node.js 和浏览器环境
+- **完整功能** - 支持读写、渲染展示
+- **高 DPI 支持** - Canvas 渲染支持 Retina 显示屏
+- **自动列宽** - 根据内容自动计算列宽
 
-## Installation
+## 安装
 
 ```bash
 npm install jsxlsb
 ```
 
-Or build from source:
+或从源码构建：
 
 ```bash
 git clone https://github.com/itcraft-cn/jsxlsb.git
@@ -34,35 +34,35 @@ npm install
 npm run build
 ```
 
-## Quick Start
+## 快速开始
 
-### Node.js - Reading
+### Node.js - 读取
 
 ```javascript
 const { XlsbReader } = require('jsxlsb');
 
 const reader = XlsbReader.builder().path('./data.xlsb').build();
 
-// Get sheet information
+// 获取 Sheet 信息
 const sheets = reader.getSheetInfos();
-console.log('Sheets:', sheets);
+console.log('工作表:', sheets);
 
-// Stream reading
+// 流式读取
 reader.forEachRow(0, {
-  onRowStart(row, colCount) { console.log(`Row ${row} start`); },
+  onRowStart(row, colCount) { console.log(`行 ${row} 开始`); },
   onCell(row, col, cell) {
-    console.log(`  ${row},${col}: ${cell.value}, format: ${cell.formatCode}`);
+    console.log(`  ${row},${col}: ${cell.value}, 格式: ${cell.formatCode}`);
   },
-  onRowEnd(row) { console.log(`Row ${row} end`); }
+  onRowEnd(row) { console.log(`行 ${row} 结束`); }
 });
 
-// Batch reading
-const batch = reader.readRows(0, 100, 1000);  // Read 1000 rows starting from row 100
+// 分页读取
+const batch = reader.readRows(0, 100, 1000);  // 从100行开始，读取1000行
 
 reader.close();
 ```
 
-### Node.js - Writing
+### Node.js - 写入
 
 ```javascript
 const { XlsbWriter, CellData } = require('jsxlsb');
@@ -70,25 +70,25 @@ const { XlsbWriter, CellData } = require('jsxlsb');
 const writer = XlsbWriter.builder().path('./output.xlsb').build();
 
 const data = [
-  [CellData.text('Name'), CellData.text('Age'), CellData.text('Salary')],
-  [CellData.text('John'), CellData.number(25), CellData.currency(5000)],
-  [CellData.text('Jane'), CellData.number(30), CellData.percentage(0.15)],
+  [CellData.text('姓名'), CellData.text('年龄'), CellData.text('工资')],
+  [CellData.text('张三'), CellData.number(25), CellData.currency(5000)],
+  [CellData.text('李四'), CellData.number(30), CellData.percentage(0.15)],
 ];
 
-writer.writeBatch('Employees', data);
+writer.writeBatch('员工表', data);
 writer.close();
 
-console.log('XLSB file created: output.xlsb');
+console.log('XLSB 文件创建成功: output.xlsb');
 ```
 
-### Browser - Rendering
+### 浏览器 - 渲染
 
 ```html
 <script src="jsxlsb.js"></script>
 <script>
   const reader = await jsxlsb.XlsbReader.fromFile(file);
 
-  // HTML Table Renderer
+  // HTML 表格渲染
   const htmlRenderer = new jsxlsb.HtmlRenderer();
   const table = htmlRenderer.render(reader, 0, {
     maxRows: 500,
@@ -98,7 +98,7 @@ console.log('XLSB file created: output.xlsb');
   });
   document.getElementById('container').appendChild(table);
 
-  // Canvas Renderer (High DPI + Auto Column Width)
+  // Canvas 渲染（高 DPI + 自动列宽）
   const canvas = document.getElementById('canvas');
   const canvasRenderer = new jsxlsb.CanvasRenderer();
   canvasRenderer.render(canvas, reader, 0);
@@ -107,23 +107,23 @@ console.log('XLSB file created: output.xlsb');
 </script>
 ```
 
-## API Reference
+## API 参考
 
 ### CellData
 
 ```javascript
-CellData.text('text')           // Text cell
-CellData.number(123.45)         // Number cell
-CellData.number(value, formatCode)  // Number with format
-CellData.date(timestamp)        // Date cell (Excel date format)
-CellData.bool(true)             // Boolean cell
-CellData.blank()                // Blank cell
+CellData.text('文本')           // 文本单元格
+CellData.number(123.45)         // 数值单元格
+CellData.number(value, formatCode)  // 带格式的数值
+CellData.date(timestamp)        // 日期单元格（Excel 日期格式）
+CellData.bool(true)             // 布尔单元格
+CellData.blank()                // 空白单元格
 
-// Built-in formats
+// 内置格式
 CellData.percentage(0.15)           // 15.00%
 CellData.percentage(0.15, 3)        // 15.000%
 CellData.numberWithComma(1234567)   // 1,234,567.00
-CellData.numberNegativeRed(-500)    // -500.00 (red)
+CellData.numberNegativeRed(-500)    // -500.00（红色）
 CellData.currency(5000)             // ￥5,000.00
 CellData.currency(5000, '$')        // $5,000.00
 CellData.time(timestamp)            // h:mm:ss
@@ -136,14 +136,14 @@ CellData.time(timestamp)            // h:mm:ss
 const reader = XlsbReader.builder().path('./data.xlsb').build();
 const reader = XlsbReader.builder().buffer(uint8Array).build();
 
-// Browser
+// 浏览器
 const reader = await XlsbReader.fromFile(file);
 
-// Methods
-reader.getSheetInfos();           // Returns array of sheet info
-reader.forEachRow(sheetIndex, handler);  // Stream reading
-reader.readRows(sheetIndex, startRow, batchSize);  // Batch reading
-reader.getStyles();               // Returns StylesReader
+// 方法
+reader.getSheetInfos();           // 返回工作表信息数组
+reader.forEachRow(sheetIndex, handler);  // 流式读取
+reader.readRows(sheetIndex, startRow, batchSize);  // 分页读取
+reader.getStyles();               // 返回 StylesReader
 reader.close();
 ```
 
@@ -151,13 +151,13 @@ reader.close();
 
 ```javascript
 const writer = XlsbWriter.builder().path('./output.xlsb').build();
-const writer = XlsbWriter.builder().buffer().build();  // Returns Uint8Array
+const writer = XlsbWriter.builder().buffer().build();  // 返回 Uint8Array
 
-writer.writeBatch(sheetName, data);  // Write entire sheet
-writer.startSheet(sheetName, columnCount);  // Start streaming write
-writer.writeRows(data);              // Append rows
-writer.endSheet();                   // End sheet
-writer.close();                      // Finalize and return Uint8Array (if buffer mode)
+writer.writeBatch(sheetName, data);  // 写入整个工作表
+writer.startSheet(sheetName, columnCount);  // 开始流式写入
+writer.writeRows(data);              //追加行
+writer.endSheet();                   // 结束工作表
+writer.close();                      // 完成并返回 Uint8Array（如果是 buffer 模式）
 ```
 
 ### HtmlRenderer
@@ -168,13 +168,13 @@ const renderer = new HtmlRenderer(config);
 const table = renderer.render(reader, sheetIndex, {
   maxRows: 500,
   maxColumns: 20,
-  theme: 'light',      // 'light' or 'dark'
+  theme: 'light',      // 'light' 或 'dark'
   stickyHeader: true,
   showHeader: true,
   cellWidth: 100
 });
 
-renderer.renderTo(container, reader, sheetIndex, config);  // Direct append to DOM
+renderer.renderTo(container, reader, sheetIndex, config);  // 直接添加到 DOM
 ```
 
 ### CanvasRenderer
@@ -190,70 +190,75 @@ renderer.render(canvas, reader, sheetIndex, {
   maxRenderColumns: 20
 });
 
-renderer.setZoom(1.5);           // Set zoom level (0.5 - 3)
-renderer.scrollTo(row, col);     // Scroll to position
-renderer.resize(width, height);  // Resize canvas
-renderer.destroy();              // Clean up
+renderer.setZoom(1.5);           // 设置缩放级别（0.5 - 3）
+renderer.scrollTo(row, col);     // 滚动到指定位置
+renderer.resize(width, height);  // 调整 Canvas 尺寸
+renderer.destroy();              // 清理资源
 ```
 
-### Format Utilities
+### 格式化工具
 
 ```javascript
 const { formatCell, isDateFormat, excelDateToTimestamp } = require('jsxlsb');
 
-// Format a cell value
+// 格式化单元格值
 const result = formatCell(-500, '#,##0.00;[Red]-#,##0.00');
-// Returns: { text: '-500.00', color: 'red' }
+// 返回: { text: '-500.00', color: 'red' }
 
-// Check if format is date/time
+// 检查是否为日期/时间格式
 isDateFormat('m/d/yy h:mm');  // true
 
-// Convert Excel date to timestamp
-excelDateToTimestamp(46131.401);  // Returns JavaScript timestamp
+// 转换 Excel 日期为时间戳
+excelDateToTimestamp(46131.401);  // 返回 JavaScript 时间戳
 ```
 
-## Format Support
+## 格式支持
 
-### Number Formats
+### 数字格式
 
-| Format Code | Example |
-|-------------|---------|
+| 格式代码 | 示例 |
+|---------|------|
 | `General` | 123.45 |
 | `#,##0.00` | 1,234.56 |
-| `#,##0.00;[Red]-#,##0.00` | -500.00 (red) |
+| `#,##0.00;[Red]-#,##0.00` | -500.00（红色） |
 | `￥#,##0.00` | ￥1,234.56 |
 | `0.00%` | 15.00% |
 
-### Date/Time Formats
+### 日期/时间格式
 
-| Format Code | Example |
-|-------------|---------|
+| 格式代码 | 示例 |
+|---------|------|
 | `m/d/yy` | 4/20/26 |
 | `m/d/yy h:mm` | 4/20/26 17:04 |
 | `h:mm:ss` | 17:04:35 |
 
-## Examples
+## 示例
 
-See the `examples/` directory:
+参见 `examples/` 目录：
 
-- `node-read.js` - Node.js reading example
-- `node-write.js` - Node.js writing example
-- `browser-canvas.html` - Canvas renderer demo
-- `browser-html.html` - HTML renderer demo
-- `browser-test.html` - Comprehensive browser test
+- `node-read.js` - Node.js 读取示例
+- `node-write.js` - Node.js 写入示例
+- `browser-canvas.html` - Canvas 渲染演示
+- `browser-html.html` - HTML 渲染演示
+- `browser-test.html` - 综合浏览器测试
 
-## Building
+## 构建
 
 ```bash
-npm run build       # Build UMD bundle
-npm run build:watch # Watch mode
-npm run typecheck   # Type checking
+npm run build       # 构建 UMD 包
+npm run build:watch # 监听模式
+npm run typecheck   # 类型检查
 ```
 
-## License
+## 相关文档
+
+- [使用手册](MANUAL.md) — 安装、构建、API 用法与示例
+- [变更日志](CHANGELOG.md) — 版本历史
+
+## 许可证
 
 Apache License 2.0
 
-## Related
+## 相关项目
 
-- [jxlsb](https://github.com/itcraft-cn/jxlsb) - Java version of this library
+- [jxlsb](https://github.com/itcraft-cn/jxlsb) - 本库的 Java 版本
