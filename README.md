@@ -18,6 +18,8 @@
 - **完整功能** - 支持读写、渲染展示
 - **高 DPI 支持** - Canvas 渲染支持 Retina 显示屏
 - **自动列宽** - 根据内容自动计算列宽
+- **行列上限策略** - 16384 列 × 1048576 行，`Error` / `Cut` 可选
+- **压缩级别可调** - ZIP 压缩 0-9，默认 1（速度优先）
 
 ## 安装
 
@@ -159,6 +161,22 @@ writer.writeRows(data);              //追加行
 writer.endSheet();                   // 结束工作表
 writer.close();                      // 完成并返回 Uint8Array（如果是 buffer 模式）
 ```
+
+压缩级别与行列上限：
+
+```javascript
+const writer = XlsbWriter.builder()
+  .path('./output.xlsb')
+  .compressionLevel(6)   // 0=store，1-9=deflate；默认 1
+  .build();
+
+const { MAX_COLUMNS, MAX_ROWS, OverflowBehavior, setOverflow } = require('jsxlsb');
+setOverflow(OverflowBehavior.Cut, OverflowBehavior.Error);
+```
+
+- 上限常量：`MAX_COLUMNS = 16384`、`MAX_ROWS = 1048576`
+- 超限行为：`Error` 抛 `LimitExceededError`；`Cut` 截断到上限
+- 配置是全局的，每次写入操作开始时快照，只影响之后的操作
 
 ### HtmlRenderer
 

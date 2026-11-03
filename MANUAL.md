@@ -73,6 +73,24 @@ writer.writeBatch('Employees', data);
 writer.close();
 ```
 
+### 4.3 行列上限与压缩级别
+
+```javascript
+const { XlsbWriter, OverflowBehavior, setOverflow } = require('jsxlsb');
+
+// 列超限截断、行超限报错（全局配置，操作开始时快照）
+setOverflow(OverflowBehavior.Cut, OverflowBehavior.Error);
+
+const writer = XlsbWriter.builder()
+  .path('./output.xlsb')
+  .compressionLevel(6)   // 0=store，1-9=deflate；默认 1
+  .build();
+```
+
+- 上限常量：`MAX_COLUMNS = 16384`、`MAX_ROWS = 1048576`
+- `Error` 抛 `LimitExceededError`，`Cut` 静默截断
+- 批量写、流式写、模板填充均受同一策略约束
+
 ## 5. 浏览器用法
 
 ```html

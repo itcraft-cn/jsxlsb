@@ -18,6 +18,8 @@ Viewed from this narrow, output-oriented angle, XLSX is simply not needed — XL
 - **Full Functionality** - Read, write, and render capabilities
 - **High DPI Support** - Canvas renderer supports retina displays
 - **Auto Column Width** - Automatically calculates column widths based on content
+- **Row/Column Limit Policy** - 16384 columns × 1048576 rows, `Error` or `Cut`
+- **Configurable Compression** - ZIP level 0-9, default 1 (speed first)
 
 ## Installation
 
@@ -159,6 +161,22 @@ writer.writeRows(data);              // Append rows
 writer.endSheet();                   // End sheet
 writer.close();                      // Finalize and return Uint8Array (if buffer mode)
 ```
+
+Compression level and row/column limits:
+
+```javascript
+const writer = XlsbWriter.builder()
+  .path('./output.xlsb')
+  .compressionLevel(6)   // 0=store, 1-9=deflate; default 1
+  .build();
+
+const { MAX_COLUMNS, MAX_ROWS, OverflowBehavior, setOverflow } = require('jsxlsb');
+setOverflow(OverflowBehavior.Cut, OverflowBehavior.Error);
+```
+
+- Limits: `MAX_COLUMNS = 16384`, `MAX_ROWS = 1048576`
+- `Error` throws `LimitExceededError`; `Cut` truncates to the limit
+- Configuration is global and snapshotted when each write operation starts
 
 ### HtmlRenderer
 

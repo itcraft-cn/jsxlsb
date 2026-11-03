@@ -73,6 +73,24 @@ writer.writeBatch('Employees', data);
 writer.close();
 ```
 
+### 4.3 Row/Column Limits and Compression
+
+```javascript
+const { XlsbWriter, OverflowBehavior, setOverflow } = require('jsxlsb');
+
+// Cut on column overflow, error on row overflow (global, snapshotted per write)
+setOverflow(OverflowBehavior.Cut, OverflowBehavior.Error);
+
+const writer = XlsbWriter.builder()
+  .path('./output.xlsb')
+  .compressionLevel(6)   // 0=store, 1-9=deflate; default 1
+  .build();
+```
+
+- Limits: `MAX_COLUMNS = 16384`, `MAX_ROWS = 1048576`
+- `Error` throws `LimitExceededError`; `Cut` silently truncates
+- Batch writes, streaming writes and template filling share the same policy
+
 ## 5. Browser Usage
 
 ```html
