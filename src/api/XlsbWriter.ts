@@ -454,6 +454,12 @@ class XlsbWriterBuilder {
     return this;
   }
 
+  /** ZIP 压缩级别：0=store，1-9=deflate；默认 1（速度优先）。 */
+  compressionLevel(level: number): XlsbWriterBuilder {
+    this.options.compressionLevel = level;
+    return this;
+  }
+
   build(): XlsbWriter {
     return new XlsbWriter(this.options);
   }
