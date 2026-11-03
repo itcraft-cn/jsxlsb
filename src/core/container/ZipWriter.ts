@@ -5,8 +5,25 @@ export interface ZipEntryData {
   data: Uint8Array;
 }
 
+export const DEFAULT_COMPRESSION_LEVEL = 1;
+
 export class ZipWriter {
   private entries: ZipEntryData[] = [];
+  private compressionLevel: number;
+
+  constructor(compressionLevel: number = DEFAULT_COMPRESSION_LEVEL) {
+    this.compressionLevel = this.normalizeLevel(compressionLevel);
+  }
+
+  /** 设置压缩级别（0=store，1-9=deflate；默认 1，速度优先）。 */
+  setCompressionLevel(level: number): void {
+    this.compressionLevel = this.normalizeLevel(level);
+  }
+
+  private normalizeLevel(level: number): number {
+    if (!Number.isFinite(level)) return DEFAULT_COMPRESSION_LEVEL;
+    return Math.max(0, Math.min(9, Math.floor(level)));
+  }
 
   addEntry(name: string, data: Uint8Array): void {
     this.entries.push({ name, data });
@@ -27,10 +44,14 @@ export class ZipWriter {
     let offset = 0;
 
     for (const entry of this.entries) {
-      const compressed = pako.deflateRaw(entry.data);
+      const store = this.compressionLevel === 0;
+      const compressed = store
+        ? entry.data
+        : pako.deflateRaw(entry.data, { level: this.compressionLevel as any });
+      const method = store ? 0 : 8;
       const crc32 = this.calculateCRC32(entry.data);
 
-      const localHeader = this.createLocalFileHeader(entry.name);
+      const localHeader = this.createLocalFileHeader(entry.name, method);
       chunks.push(localHeader);
       chunks.push(compressed);
 
@@ -38,7 +59,7 @@ export class ZipWriter {
       chunks.push(dataDescriptor);
 
       const centralHeader = this.createCentralDirectoryHeader(
-        entry.name, crc32, compressed.length, entry.data.length, offset
+        entry.name, crc32, compressed.length, entry.data.length, offset, method
       );
       centralHeaders.push(centralHeader);
 
@@ -64,7 +85,7 @@ export class ZipWriter {
     return result;
   }
 
-  private createLocalFileHeader(name: string): Uint8Array {
+  private createLocalFileHeader(name: string, method: number): Uint8Array {
     const nameBytes = new TextEncoder().encode(name);
     const header = new Uint8Array(30 + nameBytes.length);
     const view = new DataView(header.buffer);
@@ -72,7 +93,7 @@ export class ZipWriter {
     view.setUint32(0, 0x04034b50, true);
     view.setUint16(4, 20, true);
     view.setUint16(6, 0x0808, true);
-    view.setUint16(8, 8, true);
+    view.setUint16(8, method, true);
     view.setUint16(10, 0, true);
     view.setUint16(12, 0, true);
     view.setUint32(14, 0, true);
@@ -99,7 +120,8 @@ export class ZipWriter {
   }
 
   private createCentralDirectoryHeader(
-    name: string, crc32: number, compressedSize: number, uncompressedSize: number, offset: number
+    name: string, crc32: number, compressedSize: number, uncompressedSize: number, offset: number,
+    method: number
   ): Uint8Array {
     const nameBytes = new TextEncoder().encode(name);
     const header = new Uint8Array(46 + nameBytes.length);
@@ -109,7 +131,7 @@ export class ZipWriter {
     view.setUint16(4, 20, true);
     view.setUint16(6, 20, true);
     view.setUint16(8, 0x0808, true);
-    view.setUint16(10, 8, true);
+    view.setUint16(10, method, true);
     view.setUint16(12, 0, true);
     view.setUint16(14, 0, true);
     view.setUint32(16, crc32, true);

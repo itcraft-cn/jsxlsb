@@ -166,8 +166,9 @@ export class SheetReader {
   private handleBrtCellSt(offset: number, size: number, handler: InternalRowHandler): void {
     const col = readIntLE(this.buffer, offset);
     const styleIndex = this.readStyleIndex(offset);
-    const sstIndex = readIntLE(this.buffer, offset + 8);
-    const value = this.sst.getString(sstIndex);
+    const charCount = readIntLE(this.buffer, offset + 8);
+    if (charCount < 0 || 12 + charCount * 2 > size) return;
+    const value = decodeUTF16LE(this.buffer, offset + 12, charCount);
     handler.onCellText(this.currentRow, col, value, styleIndex);
   }
 
@@ -196,8 +197,9 @@ export class SheetReader {
   }
 
   private decodeRk(rkValue: number): number {
-    const isInt = (rkValue & 1) !== 0;
-    const div100 = (rkValue & 2) !== 0;
+    // 标准 RK：bit1 = fInt，bit0 = fX100。
+    const isInt = (rkValue & 2) !== 0;
+    const div100 = (rkValue & 1) !== 0;
 
     const valueBits = rkValue & 0xFFFFFFFC;
 

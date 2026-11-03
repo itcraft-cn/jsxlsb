@@ -14,10 +14,19 @@
 - 完整实现模板填充功能（`fillBatch`、`fillAtMarker`、模板模式）
 - Node.js 综合功能测试
 - 100K 行性能基准测试
+- **行列上限溢出策略**（与 rxlsb 对齐）：`MAX_COLUMNS = 16384`、`MAX_ROWS = 1048576`；
+  `setColumnOverflow/setRowOverflow/setOverflow`，`OverflowBehavior.{Error, Cut}`，
+  超限抛 `LimitExceededError` 或截断；每次写入通过 `SheetLimits` 快照
+- 写入器压缩级别可配置：`XlsbWriterOptions.compressionLevel` / `ZipWriter.setCompressionLevel`，默认 **1**
 
 ### 修复
 
 - 模板模式下将模板工作表加入 `workbookWriter`
+- 空白单元格不再写入 `BrtCellBlank`，避免文件膨胀
+- 流式写入的 `BrtWsDim.last_row` 改为前导占位、结束时回填（同时修正列数被写成 0 的问题）
+- RK 编码改为标准整数形式 `(n << 2) | 0x02`；`decodeRk` 标志位对齐 MS-XLSB（bit1=fInt，bit0=fX100）
+- 模板填充统一受行列上限约束（维度裁剪、超限单元格/填充列跳过）
+- SST UTF-16 解码改为一次边界检查 + 分块批量构造字符串
 
 ### 变更
 

@@ -42,6 +42,14 @@ export class Biff12Writer {
     this.buffer.push(...writeXLWideString(str));
   }
 
+  /** 在指定偏移回填一个小端 u32（用于事后修补维度等字段）。 */
+  setUint32At(offset: number, value: number): void {
+    const bytes = writeIntLE(value);
+    for (let i = 0; i < 4; i++) {
+      this.buffer[offset + i] = bytes[i];
+    }
+  }
+
   writeCell(column: number, styleIndex: number = 0): void {
     this.writeIntLE(column);
     this.buffer.push(styleIndex & 0xFF);
@@ -61,6 +69,18 @@ export class Biff12Writer {
     this.writeIntLE(0);
     this.writeIntLE(0);
     this.writeIntLE(0);
+  }
+
+  /** 写入单元格 8 字节头：column(4) + style(3) + flags(1)。 */
+  writeCellHeader(buffer: number[], offset: number, column: number, styleIndex: number): void {
+    buffer[offset] = column & 0xFF;
+    buffer[offset + 1] = (column >>> 8) & 0xFF;
+    buffer[offset + 2] = (column >>> 16) & 0xFF;
+    buffer[offset + 3] = (column >>> 24) & 0xFF;
+    buffer[offset + 4] = styleIndex & 0xFF;
+    buffer[offset + 5] = (styleIndex >>> 8) & 0xFF;
+    buffer[offset + 6] = (styleIndex >>> 16) & 0xFF;
+    buffer[offset + 7] = 0;
   }
 
   writeBrtCellBlank(row: number, col: number, styleIndex: number = 0): void {
@@ -126,17 +146,8 @@ export class Biff12Writer {
   }
 
   private encodeRk(value: number): number {
-    if (Number.isInteger(value) && value >= -536870912 && value <= 536870911) {
-      return ((value << 2) | 2) & 0xFFFFFFFF;
-    }
-    const floatBits = new DataView(new ArrayBuffer(8));
-    floatBits.setFloat64(0, value, true);
-    const low = floatBits.getInt32(0, true);
-    const high = floatBits.getInt32(4, true);
-    if ((high & 0xFFFFFFFC) === 0 && low === 0) {
-      return ((high >>> 2) << 2) | 0;
-    }
-    return ((high >>> 2) << 2) | 1;
+    // 标准 RK 整数形式：num(30 位有符号)<<2 | fInt(bit1)=1
+    return (((value << 2) | 0x02) >>> 0);
   }
 
   toUint8Array(): Uint8Array {

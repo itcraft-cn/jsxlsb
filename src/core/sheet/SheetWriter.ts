@@ -5,6 +5,7 @@ import { Biff12Writer } from '../biff12/Biff12Writer';
 import { RecordTypes } from '../biff12/RecordTypes';
 import { timestampToExcelDate } from '../../utils/DateUtils';
 import { CellInfo, MergeCell } from '../template/SheetParser';
+import { SheetLimits } from '../limits';
 
 const MIN_RK_INTEGER = -536870912;
 const MAX_RK_INTEGER = 536870911;
@@ -19,6 +20,8 @@ export class SheetWriter {
   private defaultDateStyleId: number = 0;
   private streamingWriter: Biff12Writer | null = null;
   private streamingColumnCount: number = 0;
+  private streamingDimLastRowOffset: number = 0;
+  private streamingLimits: SheetLimits | null = null;
 
   constructor(sst: SharedStringsTable, stylesWriter?: any) {
     this.sst = sst;
@@ -29,7 +32,10 @@ export class SheetWriter {
   }
 
   writeSheet(supplier: CellDataSupplier, rowCount: number, columnCount: number): Uint8Array {
-    const estimatedSize = rowCount * columnCount * 30 + 1024;
+    const limits = SheetLimits.begin(columnCount);
+    columnCount = limits.columns();
+    rowCount = limits.rows(0, rowCount);
+
     const w = new Biff12Writer();
 
     this.writeSheetHeader(w, rowCount, columnCount);
@@ -53,22 +59,30 @@ export class SheetWriter {
   }
 
   startStreaming(columnCount: number): void {
+    const limits = SheetLimits.begin(columnCount);
+    columnCount = limits.columns();
+
     this.streamingWriter = new Biff12Writer();
     this.streamingColumnCount = columnCount;
+    this.streamingLimits = limits;
 
-    this.writeSheetHeader(this.streamingWriter, 0, columnCount);
+    // 前导先写维度（last_row 先置 0），结束时按偏移回填。
+    this.streamingDimLastRowOffset = this.writeSheetHeader(this.streamingWriter, 0, columnCount);
     this.streamingWriter.writeEmptyRecord(RecordTypes.BrtBeginSheetData);
   }
 
   appendRows(supplier: CellDataSupplier, startRow: number, batchSize: number, columnCount: number): void {
-    if (!this.streamingWriter) {
+    if (!this.streamingWriter || !this.streamingLimits) {
       throw new Error('Streaming not started, call startStreaming() first');
     }
 
-    for (let row = startRow; row < startRow + batchSize; row++) {
-      this.writeBrtRowHdr(this.streamingWriter, row, columnCount);
+    const rows = this.streamingLimits.rows(startRow, batchSize);
+    const cols = this.streamingColumnCount;
 
-      for (let col = 0; col < columnCount; col++) {
+    for (let row = startRow; row < startRow + rows; row++) {
+      this.writeBrtRowHdr(this.streamingWriter, row, cols);
+
+      for (let col = 0; col < cols; col++) {
         const data = supplier.get(row, col);
         if (data && data.type) {
           this.writeCell(this.streamingWriter, row, col, data);
@@ -82,35 +96,38 @@ export class SheetWriter {
       throw new Error('Streaming not started');
     }
 
+    const lastRow = totalRows > 0 ? totalRows - 1 : 0;
+    this.streamingWriter.setUint32At(this.streamingDimLastRowOffset, lastRow);
+
     this.writeSheetFooter(this.streamingWriter);
 
     const result = this.streamingWriter.toUint8Array();
     this.streamingWriter = null;
     this.streamingColumnCount = 0;
+    this.streamingLimits = null;
 
     return result;
   }
 
-  private writeSheetHeader(w: Biff12Writer, rowCount: number, columnCount: number): void {
+  /** 写入 sheet 前导，返回 BrtWsDim 中 last_row 字段的字节偏移（用于回填）。 */
+  private writeSheetHeader(w: Biff12Writer, rowCount: number, columnCount: number): number {
     w.writeEmptyRecord(RecordTypes.BrtBeginSheet);
 
     this.writeBrtWsProp(w);
 
-    if (rowCount > 0 && columnCount > 0) {
-      w.writeRecordHeader(RecordTypes.BrtWsDim, 16);
-      w.writeIntLE(0);
-      w.writeIntLE(rowCount - 1);
-      w.writeIntLE(0);
-      w.writeIntLE(columnCount - 1);
-    } else {
-      w.writeRecordHeader(RecordTypes.BrtWsDim, 16);
-      w.writeIntLE(0);
-      w.writeIntLE(0);
-      w.writeIntLE(0);
-      w.writeIntLE(0);
-    }
+    const dimOffset = w.size();
+    const lastRow = rowCount > 0 ? rowCount - 1 : 0;
+    const lastCol = columnCount > 0 ? columnCount - 1 : 0;
+    w.writeRecordHeader(RecordTypes.BrtWsDim, 16);
+    w.writeIntLE(0);
+    w.writeIntLE(lastRow);
+    w.writeIntLE(0);
+    w.writeIntLE(lastCol);
 
     this.writeViewRecords(w);
+
+    // type varint(2) + varsize(1) + first_row(4)
+    return dimOffset + 2 + 1 + 4;
   }
 
   private writeSheetFooter(w: Biff12Writer): void {
@@ -123,8 +140,29 @@ export class SheetWriter {
 
   private writeBrtRowHdr(w: Biff12Writer, row: number, colCount: number): void {
     const numSpans = colCount > 0 ? Math.ceil(colCount / 1024) : 0;
-    const recordSize = 4 + 4 + 2 + 3 + 4 + (numSpans * 8);
 
+    // 常见路径：单 span（列数 <= 1024），固定 27 字节整块写出。
+    if (numSpans === 1) {
+      const b = new Array<number>(27).fill(0);
+      b[0] = RecordTypes.BrtRowHdr;
+      b[1] = 25;
+      b[2] = row & 0xFF;
+      b[3] = (row >>> 8) & 0xFF;
+      b[4] = (row >>> 16) & 0xFF;
+      b[5] = (row >>> 24) & 0xFF;
+      b[10] = 0x0E;
+      b[11] = 0x01;
+      b[15] = 1;
+      const last = colCount - 1;
+      b[23] = last & 0xFF;
+      b[24] = (last >>> 8) & 0xFF;
+      b[25] = (last >>> 16) & 0xFF;
+      b[26] = (last >>> 24) & 0xFF;
+      w.writeBytes(b);
+      return;
+    }
+
+    const recordSize = 4 + 4 + 2 + 3 + 4 + (numSpans * 8);
     w.writeRecordHeader(RecordTypes.BrtRowHdr, recordSize);
     w.writeIntLE(row);
     w.writeIntLE(0);
@@ -170,7 +208,7 @@ export class SheetWriter {
         break;
 
       case CellType.BLANK:
-        this.writeBrtCellBlank(w, col, actualStyleIndex);
+        // 空白单元格不生成记录（与 jxlsb/rxlsb 一致），避免文件膨胀。
         break;
 
       default:
@@ -199,40 +237,61 @@ export class SheetWriter {
   }
 
   private writeBrtCellRk(w: Biff12Writer, col: number, value: number, styleIndex: number): void {
-    w.writeRecordHeader(RecordTypes.BrtCellRk, 12);
-    w.writeCell(col, styleIndex);
-    w.writeIntLE(this.encodeRk(value));
+    const b = new Array<number>(14).fill(0);
+    b[0] = RecordTypes.BrtCellRk;
+    b[1] = 12;
+    w.writeCellHeader(b, 2, col, styleIndex);
+    const rk = this.encodeRk(value);
+    b[10] = rk & 0xFF;
+    b[11] = (rk >>> 8) & 0xFF;
+    b[12] = (rk >>> 16) & 0xFF;
+    b[13] = (rk >>> 24) & 0xFF;
+    w.writeBytes(b);
   }
 
   private writeBrtCellReal(w: Biff12Writer, col: number, value: number, styleIndex: number): void {
-    w.writeRecordHeader(RecordTypes.BrtCellReal, 16);
-    w.writeCell(col, styleIndex);
-    w.writeDoubleLE(value);
+    const b = new Array<number>(18).fill(0);
+    b[0] = RecordTypes.BrtCellReal;
+    b[1] = 16;
+    w.writeCellHeader(b, 2, col, styleIndex);
+    const dv = new DataView(new ArrayBuffer(8));
+    dv.setFloat64(0, value, true);
+    for (let i = 0; i < 8; i++) b[10 + i] = dv.getUint8(i);
+    w.writeBytes(b);
   }
 
   private writeBrtCellBool(w: Biff12Writer, col: number, value: boolean, styleIndex: number): void {
-    w.writeRecordHeader(RecordTypes.BrtCellBool, 9);
-    w.writeCell(col, styleIndex);
-    w.writeBytes([value ? 1 : 0]);
+    const b = new Array<number>(11).fill(0);
+    b[0] = RecordTypes.BrtCellBool;
+    b[1] = 9;
+    w.writeCellHeader(b, 2, col, styleIndex);
+    b[10] = value ? 1 : 0;
+    w.writeBytes(b);
   }
 
   private writeBrtCellIsst(w: Biff12Writer, col: number, sstIndex: number, styleIndex: number): void {
-    w.writeRecordHeader(RecordTypes.BrtCellIsst, 12);
-    w.writeCell(col, styleIndex);
-    w.writeIntLE(sstIndex);
+    const b = new Array<number>(14).fill(0);
+    b[0] = RecordTypes.BrtCellIsst;
+    b[1] = 12;
+    w.writeCellHeader(b, 2, col, styleIndex);
+    b[10] = sstIndex & 0xFF;
+    b[11] = (sstIndex >>> 8) & 0xFF;
+    b[12] = (sstIndex >>> 16) & 0xFF;
+    b[13] = (sstIndex >>> 24) & 0xFF;
+    w.writeBytes(b);
   }
 
   private writeBrtCellBlank(w: Biff12Writer, col: number, styleIndex: number): void {
-    w.writeRecordHeader(RecordTypes.BrtCellBlank, 8);
-    w.writeCell(col, styleIndex);
+    const b = new Array<number>(10).fill(0);
+    b[0] = RecordTypes.BrtCellBlank;
+    b[1] = 8;
+    w.writeCellHeader(b, 2, col, styleIndex);
+    w.writeBytes(b);
   }
 
   private encodeRk(value: number): number {
-    const buffer = new ArrayBuffer(8);
-    const view = new DataView(buffer);
-    view.setFloat64(0, value, true);
-    const high = view.getInt32(4, true);
-    return high;
+    // 标准 RK 整数形式：num(30 位有符号)<<2 | fInt(bit1)=1
+    return (((value << 2) | 0x02) >>> 0);
   }
 
   private writeBrtWsProp(w: Biff12Writer): void {
@@ -323,10 +382,12 @@ export class SheetWriter {
     templateMaxCol: number,
     mergeCells: MergeCell[]
   ): Uint8Array {
-    const totalRows = Math.max(templateMaxRow + 1, startRow + rowCount);
-    const totalCols = Math.max(templateMaxCol + 1, startCol + columnCount);
+    // 底层维度限制：与批量/流式写入使用同一策略（模板填充也受控）。
+    const limits = SheetLimits.begin(Math.max(templateMaxCol + 1, startCol + columnCount));
+    const totalCols = limits.columns();
+    const maxCol = totalCols - 1;
+    const totalRows = limits.rows(0, Math.max(templateMaxRow + 1, startRow + rowCount));
 
-    const estimatedSize = totalRows * totalCols * 30 + 1024;
     const w = new Biff12Writer();
 
     this.writeSheetHeader(w, totalRows, totalCols);
@@ -334,8 +395,8 @@ export class SheetWriter {
 
     for (let row = 0; row < totalRows; row++) {
       this.writeBrtRowHdr(w, row, totalCols);
-      this.writeTemplateCellsForRow(w, row, templateCells, startRow, rowCount, startCol, columnCount);
-      this.writeFillCellsForRow(w, row, supplier, startRow, rowCount, startCol, columnCount);
+      this.writeTemplateCellsForRow(w, row, templateCells, startRow, rowCount, startCol, columnCount, maxCol);
+      this.writeFillCellsForRow(w, row, supplier, startRow, rowCount, startCol, columnCount, maxCol);
     }
 
     this.writeSheetFooterWithMerge(w, mergeCells);
@@ -350,9 +411,11 @@ export class SheetWriter {
     startRow: number,
     rowCount: number,
     startCol: number,
-    columnCount: number
+    columnCount: number,
+    maxCol: number
   ): void {
     for (const cell of templateCells) {
+      if (cell.col > maxCol) continue;
       if (cell.row === row && this.isOutsideFillArea(cell.row, cell.col, startRow, rowCount, startCol, columnCount)) {
         this.writeCellWithStyle(w, cell.row, cell.col, cell.data, cell.styleIndex);
       }
@@ -366,10 +429,12 @@ export class SheetWriter {
     startRow: number,
     rowCount: number,
     startCol: number,
-    columnCount: number
+    columnCount: number,
+    maxCol: number
   ): void {
-    if (row >= startRow && row < startRow + rowCount) {
-      for (let col = startCol; col < startCol + columnCount; col++) {
+    if (row >= startRow && row < startRow + rowCount && startCol <= maxCol) {
+      const fillEnd = Math.min(startCol + columnCount - 1, maxCol);
+      for (let col = startCol; col <= fillEnd; col++) {
         const data = supplier.get(row, col);
         if (data && data.type && data.type !== CellType.BLANK) {
           this.writeCell(w, row, col, data);

@@ -17,6 +17,8 @@ export interface XlsbWriterOptions {
   buffer?: boolean;
   templatePath?: string;
   templateBuffer?: Uint8Array;
+  /** ZIP 压缩级别：0=store，1-9=deflate；默认 1（速度优先）。 */
+  compressionLevel?: number;
 }
 
 export class XlsbWriter {
@@ -49,7 +51,7 @@ export class XlsbWriter {
   private streamingAccumulatedData: any[][] = [];
 
   private constructor(options: XlsbWriterOptions) {
-    this.container = new ZipWriter();
+    this.container = new ZipWriter(options.compressionLevel ?? 1);
     this.sharedStrings = new SharedStringsTable();
     this.stylesWriter = new StylesWriter();
     this.workbookWriter = new WorkbookWriter();

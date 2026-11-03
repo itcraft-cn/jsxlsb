@@ -3,6 +3,18 @@ export { XlsbReader } from './api/XlsbReader';
 export { CellData } from './core/cell/CellData';
 export { CellType } from './core/cell/CellType';
 export { SheetInfo, RowHandler } from './api/interfaces';
+export {
+  MAX_COLUMNS,
+  MAX_ROWS,
+  OverflowBehavior,
+  LimitExceededError,
+  SheetLimits,
+  setColumnOverflow,
+  setRowOverflow,
+  setOverflow,
+  columnOverflow,
+  rowOverflow
+} from './core/limits';
 
 export { Biff12Writer } from './core/biff12/Biff12Writer';
 export { Biff12Reader } from './core/biff12/Biff12Reader';

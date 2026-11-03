@@ -114,12 +114,25 @@ export function encodeUTF16LE(str: string): number[] {
 }
 
 export function decodeUTF16LE(buffer: Uint8Array, offset: number, charCount: number): string {
-  const chars: string[] = [];
-  for (let i = 0; i < charCount; i++) {
-    const code = buffer[offset + i * 2] | (buffer[offset + i * 2 + 1] << 8);
-    chars.push(String.fromCharCode(code));
+  // 一次边界检查，再按块批量构造字符串，避免逐码元调用 String.fromCharCode。
+  const available = Math.max(0, Math.floor((buffer.length - offset) / 2));
+  const count = Math.min(charCount, available);
+  if (count <= 0) return '';
+
+  const CHUNK = 4096;
+  const parts: string[] = [];
+  const units = new Array<number>(Math.min(count, CHUNK));
+
+  for (let start = 0; start < count; start += CHUNK) {
+    const end = Math.min(start + CHUNK, count);
+    const len = end - start;
+    for (let i = 0; i < len; i++) {
+      const p = offset + (start + i) * 2;
+      units[i] = buffer[p] | (buffer[p + 1] << 8);
+    }
+    parts.push(String.fromCharCode.apply(null, units.slice(0, len)));
   }
-  return chars.join('');
+  return parts.join('');
 }
 
 export function writeXLWideString(str: string): number[] {

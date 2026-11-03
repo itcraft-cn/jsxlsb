@@ -106,7 +106,7 @@ export class SharedStringsTable {
   }
 
   private parseSSTItem(data: Uint8Array): string {
-    const flags = data[0];
+    if (data.length < 5) return '';
     const charCount = readIntLE(data, 1);
     return decodeUTF16LE(data, 5, charCount);
   }

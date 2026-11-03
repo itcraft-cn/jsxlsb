@@ -14,10 +14,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Complete template filling support (`fillBatch`, `fillAtMarker`, template mode)
 - Node.js comprehensive feature test
 - Performance benchmark for 100K rows
+- **Row/column limit overflow policy** (aligned with rxlsb): `MAX_COLUMNS = 16384`,
+  `MAX_ROWS = 1048576`; `setColumnOverflow/setRowOverflow/setOverflow` with
+  `OverflowBehavior.{Error, Cut}`, throwing `LimitExceededError` or truncating
+- Configurable compression level: `XlsbWriterOptions.compressionLevel` /
+  `ZipWriter.setCompressionLevel`, default **1**
 
 ### Fixed
 
 - Add template sheets to `workbookWriter` in template mode
+- Blank cells no longer emit `BrtCellBlank`
+- Streaming `BrtWsDim.last_row` is written as a placeholder and backfilled at finalize
+  (also fixes the column count being written as 0)
+- RK encoding now uses the standard integer form `(n << 2) | 0x02`; `decodeRk` flags aligned
+  with MS-XLSB (bit1=fInt, bit0=fX100)
+- Template filling honors row/column limits; SST UTF-16 decoding uses one bounds check and
+  chunked string construction
 
 ### Changed
 
