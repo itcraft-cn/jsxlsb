@@ -20,6 +20,7 @@ Viewed from this narrow, output-oriented angle, XLSX is simply not needed — XL
 - **Auto Column Width** - Automatically calculates column widths based on content
 - **Row/Column Limit Policy** - 16384 columns × 1048576 rows, `Error` or `Cut`
 - **Configurable Compression** - ZIP level 0-9, default 1 (speed first)
+- **Template Filling** - Fill data into an existing XLSB template, by marker or stream
 
 ## Installation
 
@@ -177,6 +178,35 @@ setOverflow(OverflowBehavior.Cut, OverflowBehavior.Error);
 - Limits: `MAX_COLUMNS = 16384`, `MAX_ROWS = 1048576`
 - `Error` throws `LimitExceededError`; `Cut` truncates to the limit
 - Configuration is global and snapshotted when each write operation starts
+
+### Template Filling
+
+```javascript
+const writer = XlsbWriter.builder()
+  .template('./template.xlsb')  // or .templateBuffer(uint8Array)
+  .path('./output.xlsb')
+  .build();
+
+const data = [
+  ['John', 25, 5000],
+  ['Jane', 30, 7500],
+];
+
+writer.fillBatch(0, data, 12, 8);          // fill at the given start row/column
+writer.fillAtMarker(0, '${data}', data);   // fill at a marker in the template
+
+// Streaming fill
+writer.startFill(0, 12, 8);
+writer.fillRows(data);
+writer.endFill();
+
+writer.close();
+```
+
+- `fillBatch(sheetIndex, data, startRow, startCol)` — batch fill from a position
+- `fillAtMarker(sheetIndex, marker, data)` — fill at a template marker
+- `startFill / fillRows / endFill` — streaming fill for large datasets
+- In template mode only the template's existing sheets are filled; styles and layout are preserved on `close()`
 
 ### HtmlRenderer
 

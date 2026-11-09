@@ -7,7 +7,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.1.0] - 2026-11-09
 
 ### Added
 
@@ -34,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Documentation: added "Design Positioning" section
-- Version: moved to 1.1.0-dev
+- Version: released 1.1.0
 
 ## [1.0.0] - 2026-04-22
 
@@ -129,13 +129,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Description |
 |---------|------|-------------|
+| 1.1.0 | 2026-11-09 | Template filling, row/column limits, configurable compression |
 | 1.0.0 | 2026-04-22 | Initial release with read/write/render |
 
 ---
 
 ## Future Plans
 
-- [ ] Template filling (`fillBatch`, `fillAtMarker`)
 - [ ] Style system expansion (fonts, borders, fills)
 - [ ] Formula support
 - [ ] Chart rendering

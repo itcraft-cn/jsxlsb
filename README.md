@@ -20,6 +20,7 @@
 - **自动列宽** - 根据内容自动计算列宽
 - **行列上限策略** - 16384 列 × 1048576 行，`Error` / `Cut` 可选
 - **压缩级别可调** - ZIP 压缩 0-9，默认 1（速度优先）
+- **模板填充** - 基于现有 XLSB 模板填充数据，支持标记定位与流式填充
 
 ## 安装
 
@@ -177,6 +178,35 @@ setOverflow(OverflowBehavior.Cut, OverflowBehavior.Error);
 - 上限常量：`MAX_COLUMNS = 16384`、`MAX_ROWS = 1048576`
 - 超限行为：`Error` 抛 `LimitExceededError`；`Cut` 截断到上限
 - 配置是全局的，每次写入操作开始时快照，只影响之后的操作
+
+### 模板填充
+
+```javascript
+const writer = XlsbWriter.builder()
+  .template('./template.xlsb')  // 或 .templateBuffer(uint8Array)
+  .path('./output.xlsb')
+  .build();
+
+const data = [
+  ['张三', 25, 5000],
+  ['李四', 30, 7500],
+];
+
+writer.fillBatch(0, data, 12, 8);          // 指定起始行列填充
+writer.fillAtMarker(0, '${data}', data);   // 按模板中的标记定位填充
+
+// 流式填充
+writer.startFill(0, 12, 8);
+writer.fillRows(data);
+writer.endFill();
+
+writer.close();
+```
+
+- `fillBatch(sheetIndex, data, startRow, startCol)` — 从指定位置批量填充
+- `fillAtMarker(sheetIndex, marker, data)` — 在模板标记处填充
+- `startFill / fillRows / endFill` — 流式填充大数据集
+- 模板模式下仅可填充模板已有工作表，`close()` 时保留模板样式与结构
 
 ### HtmlRenderer
 

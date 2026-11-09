@@ -91,6 +91,46 @@ const writer = XlsbWriter.builder()
 - `Error` throws `LimitExceededError`; `Cut` silently truncates
 - Batch writes, streaming writes and template filling share the same policy
 
+### 4.4 Template Filling
+
+```javascript
+const { XlsbWriter } = require('jsxlsb');
+
+const writer = XlsbWriter.builder()
+  .template('./template.xlsb')   // or .templateBuffer(uint8Array)
+  .path('./output.xlsb')
+  .build();
+
+const data = [
+  ['John', 25, 5000],
+  ['Jane', 30, 7500],
+];
+
+// Fill at the given start row/column
+writer.fillBatch(0, data, 12, 8);
+
+// Fill at a template marker
+// writer.fillAtMarker(0, '${data}', data);
+
+writer.close();
+```
+
+Streaming fill (for large datasets):
+
+```javascript
+writer.startFill(0, 12, 8);
+writer.fillRows(data);
+writer.endFill();
+writer.close();
+```
+
+- `getTemplateSheetCount()` / `getTemplateSheetInfos()` — inspect template sheets
+- `fillBatch(sheetIndex, data, startRow, startCol)` — batch fill
+- `fillAtMarker(sheetIndex, marker, data)` — fill at a marker
+- `startFill / fillRows / endFill` — streaming fill
+- Template mode can only fill the template's existing sheets; template styles and layout are preserved on `close()`
+- Template filling shares the row/column limit policy with batch and streaming writes
+
 ## 5. Browser Usage
 
 ```html
@@ -164,7 +204,7 @@ excelDateToTimestamp(46131.401);              // JS timestamp
 
 ## 8. Limitations
 
-- Template filling is partially supported; the style system is mostly read-only
+- Template filling is supported; the style system is mostly read-only
 - Formula and chart support is not available yet
 
 ## 9. Further Docs

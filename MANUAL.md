@@ -64,12 +64,12 @@ const { XlsbWriter, CellData } = require('jsxlsb');
 const writer = XlsbWriter.builder().path('./output.xlsb').build();
 
 const data = [
-  [CellData.text('Name'), CellData.text('Age'), CellData.text('Salary')],
-  [CellData.text('John'), CellData.number(25), CellData.currency(5000)],
-  [CellData.text('Jane'), CellData.number(30), CellData.percentage(0.15)],
+  [CellData.text('姓名'), CellData.text('年龄'), CellData.text('工资')],
+  [CellData.text('张三'), CellData.number(25), CellData.currency(5000)],
+  [CellData.text('李四'), CellData.number(30), CellData.currency(7500)],
 ];
 
-writer.writeBatch('Employees', data);
+writer.writeBatch('员工表', data);
 writer.close();
 ```
 
@@ -90,6 +90,46 @@ const writer = XlsbWriter.builder()
 - 上限常量：`MAX_COLUMNS = 16384`、`MAX_ROWS = 1048576`
 - `Error` 抛 `LimitExceededError`，`Cut` 静默截断
 - 批量写、流式写、模板填充均受同一策略约束
+
+### 4.4 模板填充
+
+```javascript
+const { XlsbWriter } = require('jsxlsb');
+
+const writer = XlsbWriter.builder()
+  .template('./template.xlsb')   // 或 .templateBuffer(uint8Array)
+  .path('./output.xlsb')
+  .build();
+
+const data = [
+  ['张三', 25, 5000],
+  ['李四', 30, 7500],
+];
+
+// 指定起始行列填充
+writer.fillBatch(0, data, 12, 8);
+
+// 按模板标记定位填充
+// writer.fillAtMarker(0, '${data}', data);
+
+writer.close();
+```
+
+流式填充（适合大数据集）：
+
+```javascript
+writer.startFill(0, 12, 8);
+writer.fillRows(data);
+writer.endFill();
+writer.close();
+```
+
+- `getTemplateSheetCount()` / `getTemplateSheetInfos()` — 查询模板工作表
+- `fillBatch(sheetIndex, data, startRow, startCol)` — 批量填充
+- `fillAtMarker(sheetIndex, marker, data)` — 按标记填充
+- `startFill / fillRows / endFill` — 流式填充
+- 模板模式只能填充模板已有工作表；`close()` 时保留模板的样式与结构
+- 模板填充与批量/流式写共用行列上限策略
 
 ## 5. 浏览器用法
 
@@ -164,7 +204,7 @@ excelDateToTimestamp(46131.401);              // JS 时间戳
 
 ## 8. 限制
 
-- 模板填充为部分支持，样式系统以只读为主
+- 样式系统以只读为主，写入样式能力有限
 - 暂不支持公式、图表
 
 ## 9. 更多文档
