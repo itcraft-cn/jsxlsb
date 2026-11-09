@@ -1,6 +1,6 @@
 {
   "name": "jsxlsb",
-  "version": "1.1.0-dev",
+  "version": "1.1.0",
   "description": "JavaScript XLSB (Excel Binary Workbook) reader/writer library",
   "main": "dist/jsxlsb.js",
   "types": "dist/jsxlsb.d.ts",
